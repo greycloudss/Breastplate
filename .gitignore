@@ -27,3 +27,13 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+
+## Additions ##
+
+*.sqlite
+*.sqlite-journal
+
+*.zip
+*.rar
+*.7zip

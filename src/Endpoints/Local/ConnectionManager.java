@@ -1,9 +1,12 @@
 package Endpoints.Local;
 
+import Endpoints.Node.OutputHost;
 import helpers.Pair;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
+import java.net.Socket;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -13,13 +16,15 @@ public class ConnectionManager {
 
     private volatile ArrayList<File> files;
 
+    private volatile ArrayList<OutputHost> endpoints;
+
     private Map<File, Long> fileMap = new HashMap<>();
 
     ArrayList<Pair<File, String>> fileHashPairs = new ArrayList<>();
     ArrayList<String> replaceFiles = new ArrayList<>();
 
 
-    private Thread scannerThread;
+    private Thread dirScannerThread, mainLoopThread, listenerThread, senderThread;
 
     volatile boolean recheck;
 
@@ -64,7 +69,6 @@ public class ConnectionManager {
     }
 
     void recursiveScan() {
-
         while (!killSwitch) {
             System.gc();
 
@@ -88,19 +92,43 @@ public class ConnectionManager {
             fileHashPairs.clear();
 
             for (File loopFile : files)
-                fileHashPairs.add(new Pair<File, String>(loopFile, returnHashString(Objects.requireNonNull(encodeHash256(loopFile)))));
+                fileHashPairs.add(new Pair<>(loopFile, returnHashString(Objects.requireNonNull(encodeHash256(loopFile)))));
 
 
             recheck = true;
         }
     }
 
-    ConnectionManager(LocalHost localHost) {
-        recheck = true;
-        host = localHost;
-        scannerThread = new Thread(this::recursiveScan);
-        killSwitch = false;
+    void sendFiles() {
+        for (Pair<File, String> pair : fileHashPairs) {
+            sendFunc(pair.Val());
+        }
+    }
 
+    void sendFunc(String output) {
+        for (OutputHost endpoint : endpoints) {
+            try (Socket socket = new Socket(endpoint.getHost(), endpoint.getPort())) {
+                socket.getOutputStream().write(output.getBytes());
+
+            } catch (IOException e) {
+                System.out.println("[ERROR] {send} were not able to initiate connection with: " + endpoint.getHost() + ":" + endpoint.getPort());
+            }
+        }
+    }
+
+    void listen() {
+        while (!killSwitch && host != null) {
+
+            /*
+
+                    Listen to connections and messages from those connections
+
+            */
+
+        }
+    }
+
+    void mainLoop() {
         while (host != null) {
             try {
                 Thread.sleep(10000);
@@ -120,6 +148,22 @@ public class ConnectionManager {
 
             System.gc();
         }
+    }
+
+
+    ConnectionManager(LocalHost localHost) {
+        recheck = true;
+        host = localHost;
+
+        killSwitch = false;
+
+        dirScannerThread = new Thread(this::recursiveScan);
+        mainLoopThread = new Thread(this::mainLoop);
+        listenerThread = new Thread(this::listen);
+
+        dirScannerThread.start();
+        mainLoopThread.start();
+        listenerThread.start();
 
     }
 }
