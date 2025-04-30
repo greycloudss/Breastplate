@@ -5,6 +5,8 @@ import Endpoints.Node.OutputHost;
 
 import java.io.File;
 import java.net.Inet4Address;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.List;
 
 /*
@@ -22,8 +24,59 @@ public class LocalHost extends Host {
 
     private Thread conManThread, mainThread;
 
-    public LocalHost(Inet4Address host, int port) {
-        super(host, port);
+    private static Inet4Address localAddress() {
+        try {
+            return (Inet4Address) Inet4Address.getLocalHost();
+        } catch (UnknownHostException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+
+    ArrayList<OutputHost> getEndpoints(String[] args) {
+        ArrayList<OutputHost> endpoints = new ArrayList<>();
+
+        int mode = 0;
+
+        // modes will tell what type of flag is being cur read
+
+
+        for (int i = 0; i < args.length; i++) {
+
+            if (args[i].equals("-dir")) {
+                mode = 0;
+                continue;
+            }
+
+            if (args[i].equals("-port")) {
+                mode = 1;
+                continue;
+            }
+
+            if (args[i].equals("-add")) {
+                mode = 2;
+                continue;
+            }
+
+
+            switch (mode) {
+                case 0:
+                    directory = new File(args[i]);
+                    break;
+                case 1:
+                    setPort(Integer.parseInt(args[i]));
+                    break;
+                case 2:
+                    endpoints.add(new OutputHost(args[i]));
+                    break;
+            }
+        }
+
+        return endpoints;
+    }
+
+    public LocalHost(int port) throws UnknownHostException {
+        super((Inet4Address) Inet4Address.getLocalHost(), port);
         insight = new boolean[]{true, true, true};
     }
 

@@ -36,6 +36,19 @@ public class OutputHost extends Host {
 
     }
 
+    public OutputHost(String ep) {
+        super(ep);
+        try {
+            socket.setSoTimeout(10000);
+            socket.setTcpNoDelay(true);
+            socket = new Socket(super.getHost(), super.getPort());
+
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+            System.out.println("[ERROR] {OutputHost} could not connect to host " + super.getHost());
+        }
+    }
+
     public void closeSocket() {
         if (socket == null) return;
         do {

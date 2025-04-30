@@ -32,30 +32,34 @@ public abstract class Host {
         }
     }
 
-    private void parseAddress(String address) throws UnknownHostException {
-        String[] parts = address.split(":");
-        this.port = Integer.parseInt(parts[1]);
+    private void parseAddress(String address) {
+        try {
+            String[] parts = address.split(":");
+            this.port = Integer.parseInt(parts[1]);
 
-        if (parts.length != 2) {
-            System.out.println("[ERROR] Invalid host address (0): " + address);
-            return;
+            if (parts.length != 2) {
+                System.out.println("[ERROR] Invalid host address (0): " + address);
+                return;
+            }
+
+            parts = parts[0].trim().toLowerCase().split("\\.");
+
+            if (parts.length != 4) {
+                System.out.println("[ERROR] Invalid host address (1): " + address);
+                return;
+            }
+
+            byte[] arr = new byte[4];
+
+            for (int i = 0; i < 4; i++) arr[i] = (byte) Integer.parseInt(parts[i]);
+
+            host = (Inet4Address) Inet4Address.getByAddress(arr);
+        } catch (Exception e) {
+            System.out.println("[ERROR] Invalid host address (2): " + address);
         }
-
-        parts = parts[0].trim().toLowerCase().split("\\.");
-
-        if (parts.length != 4)  {
-            System.out.println("[ERROR] Invalid host address (1): " + address);
-            return;
-        }
-
-        byte[] arr = new byte[4];
-
-        for (int i = 0; i < 4; i++) arr[i] = (byte) Integer.parseInt(parts[i]);
-
-        host = (Inet4Address) Inet4Address.getByAddress(arr);
     }
 
-    public Host(String address) throws UnknownHostException {
+    public Host(String address) {
         parseAddress(address);
     }
 

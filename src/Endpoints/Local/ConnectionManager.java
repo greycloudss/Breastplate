@@ -53,6 +53,7 @@ public class ConnectionManager {
     ArrayList<String> replaceFiles = new ArrayList<>();
 
 
+
     private Thread dirScannerThread, mainLoopThread, listenerThread, senderThread;
 
     volatile boolean recheck;
@@ -210,8 +211,6 @@ public class ConnectionManager {
         return endpoints.size() - against >= against;
     }
 
-
-
     void mainLoop() {
         while (!killSwitch) {
             try {
@@ -235,6 +234,23 @@ public class ConnectionManager {
 
     public void forceRecheck() {
         recheck = true;
+    }
+
+
+    ConnectionManager(LocalHost localHost, ArrayList<OutputHost> endpoints) {
+        recheck = true;
+        host = localHost;
+
+        killSwitch = false;
+
+        dirScannerThread = new Thread(this::recursiveScan);
+        mainLoopThread = new Thread(this::mainLoop);
+        listenerThread = new Thread(this::listen);
+
+        dirScannerThread.start();
+        mainLoopThread.start();
+        listenerThread.start();
+
     }
 
     ConnectionManager(LocalHost localHost) {
