@@ -238,6 +238,8 @@ public class ConnectionManager {
 
 
     ConnectionManager(LocalHost localHost, ArrayList<OutputHost> endpoints) {
+
+        this.endpoints.addAll(endpoints);
         recheck = true;
         host = localHost;
 

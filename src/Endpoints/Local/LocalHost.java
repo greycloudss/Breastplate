@@ -33,13 +33,11 @@ public class LocalHost extends Host {
     }
 
 
-    ArrayList<OutputHost> getEndpoints(String[] args) {
+    ArrayList<OutputHost> parseFlags(String[] args) {
         ArrayList<OutputHost> endpoints = new ArrayList<>();
-
         int mode = 0;
 
         // modes will tell what type of flag is being cur read
-
 
         for (int i = 0; i < args.length; i++) {
 
@@ -75,8 +73,10 @@ public class LocalHost extends Host {
         return endpoints;
     }
 
-    public LocalHost(int port) throws UnknownHostException {
-        super((Inet4Address) Inet4Address.getLocalHost(), port);
+    public LocalHost() throws UnknownHostException {
+        super((Inet4Address) Inet4Address.getLocalHost(), 22);
+
+        connectionManager = new ConnectionManager(this);
         insight = new boolean[]{true, true, true};
     }
 
