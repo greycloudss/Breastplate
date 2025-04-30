@@ -3,20 +3,49 @@ package Endpoints.Local;
 import Endpoints.Node.OutputHost;
 import helpers.Pair;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/*          ---------------TODO LIST ---------------
+*       [1] Instead of raw tcp with basically no encryption add  ztna or at least sslsockets
+*
+*       [2] optimise due to vm maintaining costing money
+*
+*       [3] how about actually finishing this project lol
+*/
+
+
+
+/*          ---------------RANDOM COMMENTS---------------
+
+    0) if should check -> broadcast -> receive answer -> 1,2,3
+
+    1) if answer bad then SFTP in the files as update
+
+    2) if answer good then return to 0
+
+    3) if answer mixed elect via democracy to update 4,5
+
+    4) if democracy then 1
+
+    5) if tie try to remove/add your own as answer due to it becoming 2n+1 return to 0
+
+*/
+
+
+
 public class ConnectionManager {
-    private LocalHost host;
+    private final LocalHost host;
 
     private volatile ArrayList<File> files;
 
     private volatile ArrayList<OutputHost> endpoints;
+
+    private volatile ArrayList<OutputHost> updEndpoints;
 
     private Map<File, Long> fileMap = new HashMap<>();
 
@@ -50,6 +79,7 @@ public class ConnectionManager {
             }
             return digest.digest();
         } catch (Exception e) {
+            System.out.println("[ERROR] {CM enc256} failed to encode hash");
             return null;
         }
     }
@@ -99,57 +129,113 @@ public class ConnectionManager {
         }
     }
 
+    // some of these sending funcs might be redundant but ill keep them for now
+
     void sendFiles() {
         for (Pair<File, String> pair : fileHashPairs) {
-            sendFunc(pair.Val());
+            broadcast(pair.Val());
         }
     }
 
-    void sendFunc(String output) {
+    boolean[] multicast(ArrayList<OutputHost> endpointList, String output) {
+        boolean[] multicasted = new boolean[endpointList.size()];
+
+        for (int i = 0; i < endpointList.size(); i++)
+            multicasted[i] = (unicast(endpointList.get(i), output));
+
+        return multicasted;
+    }
+
+    boolean unicast(OutputHost endpoint, String output) {
+
+        //basically retry connection until it can be established if not after retrying 3 times - quit
+
+        for (int i = 0; i < 3; i++) {
+            try {
+                endpoint.getSocket().getOutputStream().write(output.getBytes());
+                endpoint.getSocket().getOutputStream().flush(); // subject for change
+
+            } catch (Exception e) {
+                System.out.println("[ERROR] {CM unicast} failed to write to socket");
+                if (i == 2) return false;
+            }
+
+            try {
+                Thread.sleep(5000);
+            } catch (Exception e) {
+                System.out.println("[ERROR] {CM unicast} failed to sleep");
+            }
+        }
+
+        return true;
+    }
+
+    void broadcast(String output) {
         for (OutputHost endpoint : endpoints) {
             try (Socket socket = new Socket(endpoint.getHost(), endpoint.getPort())) {
                 socket.getOutputStream().write(output.getBytes());
 
             } catch (IOException e) {
-                System.out.println("[ERROR] {send} were not able to initiate connection with: " + endpoint.getHost() + ":" + endpoint.getPort());
+                System.out.println("[ERROR] {SendFunc} were not able to initiate connection with: " + endpoint.getHost() + ":" + endpoint.getPort());
             }
         }
     }
 
     void listen() {
-        while (!killSwitch && host != null) {
+        if (killSwitch || host == null) return;
 
-            /*
+        try (ServerSocket serverSocket = new ServerSocket(host.getPort())) {
+            do {
+                endpoints.add(new OutputHost(serverSocket.accept()));
+            } while (!killSwitch && host != null);
 
-                    Listen to connections and messages from those connections
+        } catch (Exception e) {
+            //got to think about what i want to add here
+        } finally {
+            //cleanup
+            for (OutputHost endpoint : endpoints)
+                endpoint.closeSocket();
 
-            */
-
+            endpoints = null;
         }
     }
 
+    boolean democracy() {
+        int against = 0;
+
+        for (OutputHost endpoint : endpoints) {
+            //add each endpoint disagreement pair of pos and returnHash
+        }
+
+        return endpoints.size() - against >= against;
+    }
+
+
+
     void mainLoop() {
-        while (host != null) {
+        while (!killSwitch) {
             try {
                 Thread.sleep(10000);
             } catch (InterruptedException e) {
                 System.out.println("[Error] {CM main} Failed to scan due to sleep");
             }
 
-
             if (!recheck) continue;
             System.out.println("[Error] {CM main} Starting scan");
 
-            /*
-
-                reach out for scan to OutputHosts
-
-            */
+            sendFiles();
 
             System.gc();
         }
     }
 
+    public boolean isRecheck() {
+        return recheck;
+    }
+
+    public void forceRecheck() {
+        recheck = true;
+    }
 
     ConnectionManager(LocalHost localHost) {
         recheck = true;

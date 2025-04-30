@@ -7,20 +7,37 @@ import java.io.File;
 import java.net.Inet4Address;
 import java.util.List;
 
+/*
+        insight[] = {
+        should allow new connections,
+        allow updates,
+        broadcasting enabled?
+        }
+*/
+
 public class LocalHost extends Host {
     private ConnectionManager connectionManager;
-
+    private boolean[] insight;
     private File directory;
 
     private Thread conManThread, mainThread;
 
-
     public LocalHost(Inet4Address host, int port) {
         super(host, port);
+        insight = new boolean[]{true, true, true};
     }
 
     public File getDirectory() {
         return directory;
+    }
+
+
+    void changeInsights(boolean[] newInsights) {
+        insight = newInsights;
+    }
+
+    boolean[] returnOperationalInsight() {
+        return insight;
     }
 
     @Override

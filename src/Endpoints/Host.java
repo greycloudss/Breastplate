@@ -2,6 +2,7 @@ package Endpoints;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,6 +18,17 @@ public abstract class Host {
             this.port = port;
         } catch (Exception e) {
             System.out.println(e.getMessage());
+        }
+    }
+
+    public Host(Socket socket) {
+        try {
+            setPort(socket.getPort());
+            setHost((Inet4Address) socket.getInetAddress());
+
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+            System.out.println("[ERROR] {HOST} could not connect to host " + getHost());
         }
     }
 
@@ -47,8 +59,12 @@ public abstract class Host {
         parseAddress(address);
     }
 
-    public Inet4Address getHostAddress() {
-        return host;
+    public void setHost(Inet4Address host) {
+        this.host = host;
+    }
+
+    public void setPort(int port) {
+        this.port = port;
     }
 
     public Inet4Address getHost() {
