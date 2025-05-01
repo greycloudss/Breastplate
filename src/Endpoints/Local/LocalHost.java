@@ -24,14 +24,6 @@ public class LocalHost extends Host {
 
     private Thread conManThread, mainThread;
 
-    private static Inet4Address localAddress() {
-        try {
-            return (Inet4Address) Inet4Address.getLocalHost();
-        } catch (UnknownHostException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
 
     ArrayList<OutputHost> parseFlags(String[] args) {
         ArrayList<OutputHost> endpoints = new ArrayList<>();
@@ -73,10 +65,12 @@ public class LocalHost extends Host {
         return endpoints;
     }
 
-    public LocalHost() throws UnknownHostException {
+    public LocalHost(String[] args) throws UnknownHostException {
         super((Inet4Address) Inet4Address.getLocalHost(), 22);
 
-        connectionManager = new ConnectionManager(this);
+
+
+        connectionManager = new ConnectionManager(this, parseFlags(args));
         insight = new boolean[]{true, true, true};
     }
 

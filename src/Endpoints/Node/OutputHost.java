@@ -1,7 +1,9 @@
 package Endpoints.Node;
 
 import Endpoints.Host;
+import Endpoints.Local.ConnectionManager;
 
+import java.io.*;
 import java.net.Inet4Address;
 import java.net.Socket;
 import java.net.SocketException;
@@ -10,12 +12,16 @@ import java.util.List;
 public class OutputHost extends Host {
     Socket socket;
 
+    Thread runThread;
+
     public OutputHost(Inet4Address host, int port) {
         super(host, port);
         try {
             socket.setSoTimeout(10000);
             socket.setTcpNoDelay(true);
             socket = new Socket(super.getHost(), super.getPort());
+
+
 
         } catch (Exception e) {
             System.out.println(e.getMessage());

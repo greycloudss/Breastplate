@@ -41,9 +41,9 @@ import java.util.stream.Collectors;
 public class ConnectionManager {
     private final LocalHost host;
 
-    private volatile ArrayList<File> files;
+    private volatile ArrayList<File> files = new ArrayList<>();
 
-    private volatile ArrayList<OutputHost> endpoints;
+    private volatile ArrayList<OutputHost> endpoints = new ArrayList<>();
 
     private volatile ArrayList<OutputHost> updEndpoints;
 
@@ -110,14 +110,19 @@ public class ConnectionManager {
                 System.out.println(e.getMessage());
             }
 
-            Map<File, Long> oldFileMap = files.stream().collect(Collectors.toMap(f -> f, File::lastModified, Math::max));
+            if (files.isEmpty() || files == null) {
+                this.files = (ArrayList<File>) recursiveFileScan(host.getDirectory());
 
-            this.files = (ArrayList<File>) recursiveFileScan(host.getDirectory());
+            } else {
+                Map<File, Long> oldFileMap = files.stream().collect(Collectors.toMap(f -> f, File::lastModified, Math::max));
 
-            fileMap = files.stream().collect(Collectors.toMap(f -> f, File::lastModified, Math::max));
+                this.files = (ArrayList<File>) recursiveFileScan(host.getDirectory());
 
-            if (oldFileMap.size() == files.size() || fileMap.entrySet().iterator().next() == oldFileMap.entrySet().iterator().next()) continue;
+                fileMap = files.stream().collect(Collectors.toMap(f -> f, File::lastModified, Math::max));
 
+                if (oldFileMap.size() == files.size() || fileMap.entrySet().iterator().next() == oldFileMap.entrySet().iterator().next())
+                    continue;
+            }
             System.out.println("[Info] {CM scan} Starting scan");
 
             fileHashPairs.clear();
@@ -173,7 +178,7 @@ public class ConnectionManager {
 
     void broadcast(String output) {
         for (OutputHost endpoint : endpoints) {
-            try (Socket socket = new Socket(endpoint.getHost(), endpoint.getPort())) {
+            try (Socket socket = endpoint.getSocket()) {
                 socket.getOutputStream().write(output.getBytes());
 
             } catch (IOException e) {
@@ -182,13 +187,16 @@ public class ConnectionManager {
         }
     }
 
+
+
     void listen() {
         if (killSwitch || host == null) return;
 
         try (ServerSocket serverSocket = new ServerSocket(host.getPort())) {
             do {
                 endpoints.add(new OutputHost(serverSocket.accept()));
-            } while (!killSwitch && host != null);
+
+            } while (!killSwitch);
 
         } catch (Exception e) {
             //got to think about what i want to add here
@@ -228,7 +236,7 @@ public class ConnectionManager {
         }
     }
 
-    public boolean isRecheck() {
+    public boolean recheckStatus() {
         return recheck;
     }
 
@@ -238,8 +246,8 @@ public class ConnectionManager {
 
 
     ConnectionManager(LocalHost localHost, ArrayList<OutputHost> endpoints) {
-
         this.endpoints.addAll(endpoints);
+
         recheck = true;
         host = localHost;
 

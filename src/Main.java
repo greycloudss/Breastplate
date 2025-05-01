@@ -6,6 +6,10 @@ import java.net.UnknownHostException;
 
 public class Main {
     public static void main(String[] args) {
-        new LocalHost();
+        try {
+            new LocalHost(args);
+        } catch (UnknownHostException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
