@@ -9,69 +9,67 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 
-/*
-        insight[] = {
-        should allow new connections,
-        allow updates,
-        broadcasting enabled?
-        }
-*/
+import static java.net.Inet4Address.*;
+
 
 public class LocalHost extends Host {
-    private ConnectionManager connectionManager;
+    private final ConnectionManager connectionManager;
     private boolean[] insight;
-    private File directory;
-
-    private Thread conManThread, mainThread;
-
-
-    ArrayList<OutputHost> parseFlags(String[] args) {
-        ArrayList<OutputHost> endpoints = new ArrayList<>();
-        int mode = 0;
-
-        // modes will tell what type of flag is being cur read
-
-        for (int i = 0; i < args.length; i++) {
-
-            if (args[i].equals("-dir")) {
-                mode = 0;
-                continue;
-            }
-
-            if (args[i].equals("-port")) {
-                mode = 1;
-                continue;
-            }
-
-            if (args[i].equals("-add")) {
-                mode = 2;
-                continue;
-            }
+    private final File directory;
+    private Thread listenerThread, broadcasterThread;
 
 
-            switch (mode) {
-                case 0:
-                    directory = new File(args[i]);
-                    break;
-                case 1:
-                    setPort(Integer.parseInt(args[i]));
-                    break;
-                case 2:
-                    endpoints.add(new OutputHost(args[i]));
-                    break;
-            }
+    private static class Config {
+        final List<OutputHost> endpoints;
+        final int port;
+        final File directory;
+
+        Config(List<OutputHost> endpoints, int port, File directory) {
+            this.endpoints = endpoints;
+            this.port = port;
+            this.directory = directory;
         }
-
-        return endpoints;
     }
 
+
+    private static Config parseArgs(String[] args) {
+        List<OutputHost> endpoints = new ArrayList<>();
+        File dir = null;
+        int port = 0;
+        int mode = -1;
+        for (String arg : args) {
+            mode = switch (arg) {
+                case "-dir" -> 0;
+                case "-port" -> 1;
+                case "-add" -> 2;
+                default -> {
+                    if (mode == 0) {
+                        dir = new File(arg);
+                    } else if (mode == 1) {
+                        port = Integer.parseInt(arg);
+                    } else if (mode == 2) {
+                        endpoints.add(new OutputHost(arg));
+                    }
+                    yield -1;
+                }
+            };
+        }
+        return new Config(endpoints, port, dir);
+    }
+
+
     public LocalHost(String[] args) throws UnknownHostException {
-        super((Inet4Address) Inet4Address.getLocalHost(), 22);
+        Config cfg = parseArgs(args);
+        super((Inet4Address) getLocalHost(), cfg.port);
 
+        this.directory = cfg.directory;
+        this.insight = new boolean[]{true, true, true};
+        this.connectionManager = new ConnectionManager(this, cfg.endpoints);
 
-
-        connectionManager = new ConnectionManager(this, parseFlags(args));
-        insight = new boolean[]{true, true, true};
+        listenerThread = new Thread(connectionManager::listen);
+        broadcasterThread = new Thread(connectionManager::mainLoop);
+        listenerThread.start();
+        broadcasterThread.start();
     }
 
     public File getDirectory() {

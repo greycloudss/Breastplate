@@ -199,6 +199,7 @@ public class ConnectionManager {
             } while (!killSwitch);
 
         } catch (Exception e) {
+            System.err.println("[ERROR] {CM listen}could not bind server socket on port " + host.getPort());
             //got to think about what i want to add here
         } finally {
             //cleanup
@@ -228,7 +229,7 @@ public class ConnectionManager {
             }
 
             if (!recheck) continue;
-            System.out.println("[Error] {CM main} Starting scan");
+            System.out.println("[Info] {CM main} Starting scan");
 
             sendFiles();
 
@@ -245,7 +246,7 @@ public class ConnectionManager {
     }
 
 
-    ConnectionManager(LocalHost localHost, ArrayList<OutputHost> endpoints) {
+    ConnectionManager(LocalHost localHost, List<OutputHost> endpoints) {
         this.endpoints.addAll(endpoints);
 
         recheck = true;

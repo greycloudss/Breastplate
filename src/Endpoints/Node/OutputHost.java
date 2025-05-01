@@ -45,9 +45,10 @@ public class OutputHost extends Host {
     public OutputHost(String ep) {
         super(ep);
         try {
+            socket = new Socket(super.getHost(), super.getPort());
             socket.setSoTimeout(10000);
             socket.setTcpNoDelay(true);
-            socket = new Socket(super.getHost(), super.getPort());
+            socket.setKeepAlive(true);
 
         } catch (Exception e) {
             System.out.println(e.getMessage());
