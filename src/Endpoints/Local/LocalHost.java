@@ -65,11 +65,6 @@ public class LocalHost extends Host {
         this.directory = cfg.directory;
         this.insight = new boolean[]{true, true, true};
         this.connectionManager = new ConnectionManager(this, cfg.endpoints);
-
-        listenerThread = new Thread(connectionManager::listen);
-        broadcasterThread = new Thread(connectionManager::mainLoop);
-        listenerThread.start();
-        broadcasterThread.start();
     }
 
     public File getDirectory() {

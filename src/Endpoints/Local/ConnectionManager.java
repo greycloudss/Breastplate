@@ -87,13 +87,13 @@ public class ConnectionManager {
 
     List<File> recursiveFileScan(File file) {
         List<File> subDirFiles = new ArrayList<>();
-        File[] files = host.getDirectory().listFiles();
+        File[] files = file.listFiles();
 
         if (files == null) return subDirFiles;
 
-        for (File loopFile : files) {
-            if (file.isDirectory()) subDirFiles.addAll(recursiveFileScan(loopFile));
-            else subDirFiles.add(loopFile);
+        for (File f : files) {
+            if (f.isDirectory()) subDirFiles.addAll(recursiveFileScan(f));
+            else subDirFiles.add(f);
         }
 
         return subDirFiles;
@@ -124,23 +124,25 @@ public class ConnectionManager {
                     continue;
             }
             System.out.println("[Info] {CM scan} Starting scan");
-
             fileHashPairs.clear();
 
             for (File loopFile : files)
                 fileHashPairs.add(new Pair<>(loopFile, returnHashString(Objects.requireNonNull(encodeHash256(loopFile)))));
 
 
-            recheck = true;
+            recheck = false;
         }
     }
 
     // some of these sending funcs might be redundant but ill keep them for now
 
     void sendFiles() {
+        StringBuilder a = new StringBuilder();
         for (Pair<File, String> pair : fileHashPairs) {
-            broadcast(pair.Val());
+            a.append(pair.Val()).append("\n");
         }
+
+        broadcast(a.toString());
     }
 
     boolean[] multicast(ArrayList<OutputHost> endpointList, String output) {
