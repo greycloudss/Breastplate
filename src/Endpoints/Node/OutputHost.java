@@ -1,32 +1,37 @@
 package Endpoints.Node;
 
 import Endpoints.Host;
+import Endpoints.Local.ConnectionManager;
+
 import java.io.InputStream;
 import java.io.IOException;
-import java.net.Inet4Address;
-import java.net.Socket;
-import java.net.SocketException;
+import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class OutputHost extends Host {
     private volatile Socket socket;
     private final Thread connectThread;
+    ConnectionManager connectionManager;
+
+    public void setConnectionManager(ConnectionManager connectionManager) {
+        this.connectionManager = connectionManager;
+    }
 
     private void connectAndConfigure(Inet4Address host, int port) {
         try {
-            Socket sock = new Socket(host, port);
-            sock.setSoTimeout(10000);
-            sock.setTcpNoDelay(true);
-            sock.setKeepAlive(true);
-            this.socket = sock;
+            this.socket = new Socket(host, port);
+            socket.setSoTimeout(10000);
+            socket.setTcpNoDelay(true);
+            socket.setKeepAlive(true);
+            socket.setReuseAddress(true);
             new Thread(() -> {
-                try (InputStream in = sock.getInputStream()) {
+                try (InputStream in = socket.getInputStream()) {
                     byte[] buf = new byte[4096];
                     int len;
                     while ((len = in.read(buf)) != -1) {
                         String msg = new String(buf, 0, len, StandardCharsets.UTF_8);
-                        System.out.println("[RECEIVED] from " + getHost() + ":" + getPort() + " : " + msg);
+                        System.out.println("[RECEIVED] from " + getHost() + ":" + getPort() + " :\n" + msg);
                     }
                 } catch (IOException ignored) {
                 }

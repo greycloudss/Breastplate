@@ -178,37 +178,53 @@ public class ConnectionManager {
         return true;
     }
 
-    void broadcast(String output) {
-        for (OutputHost endpoint : endpoints) {
-            try (Socket socket = endpoint.getSocket()) {
-                socket.getOutputStream().write(output.getBytes());
 
+    void broadcast(String output) {
+        StringBuilder outputBuilder = new StringBuilder(output);
+        List<OutputHost> removables = new ArrayList<>();
+
+        for (OutputHost endpoint : endpoints) {
+            Socket socket = endpoint.getSocket();
+
+            if (socket == null || socket.isClosed()) {
+                removables.add(endpoint);
+                continue;
+            }
+
+            outputBuilder.insert(0, endpoint.getHost() + ":" + endpoint.getPort() + ";;;");
+
+            try {
+                socket.getOutputStream().write(outputBuilder.toString().getBytes());
+                socket.getOutputStream().flush();
             } catch (IOException e) {
                 System.out.println("[ERROR] {SendFunc} were not able to initiate connection with: " + endpoint.getHost() + ":" + endpoint.getPort());
             }
         }
+
+        endpoints.removeAll(removables);
     }
 
-
+    private void closeSockets() {
+        for (OutputHost endpoint : endpoints) {
+            endpoint.closeSocket();
+        }
+        endpoints.clear();
+    }
 
     void listen() {
         if (killSwitch || host == null) return;
 
         try (ServerSocket serverSocket = new ServerSocket(host.getPort())) {
-            do {
-                endpoints.add(new OutputHost(serverSocket.accept()));
+            serverSocket.setReuseAddress(true);
 
-            } while (!killSwitch);
+            while (!killSwitch) {
+                recheck = endpoints.add(new OutputHost(serverSocket.accept()));
+                if (recheck) endpoints.getLast().setConnectionManager(this);
+            }
 
         } catch (Exception e) {
-            System.err.println("[ERROR] {CM listen}could not bind server socket on port " + host.getPort());
-            //got to think about what i want to add here
-        } finally {
-            //cleanup
-            for (OutputHost endpoint : endpoints)
-                endpoint.closeSocket();
+            System.err.println("[ERROR] {CM listen} could not bind server socket on port " + host.getPort());
 
-            endpoints = null;
         }
     }
 
@@ -250,6 +266,9 @@ public class ConnectionManager {
 
     ConnectionManager(LocalHost localHost, List<OutputHost> endpoints) {
         this.endpoints.addAll(endpoints);
+
+        for (OutputHost endpoint : endpoints)
+            endpoint.setConnectionManager(this);
 
         recheck = true;
         host = localHost;
