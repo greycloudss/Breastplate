@@ -2,11 +2,13 @@ package Endpoints.Node;
 
 import Endpoints.Host;
 import Endpoints.Local.ConnectionManager;
+import helpers.Pair;
 
 import java.io.InputStream;
 import java.io.IOException;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 
 public class OutputHost extends Host {
@@ -14,8 +16,77 @@ public class OutputHost extends Host {
     private final Thread connectThread;
     ConnectionManager connectionManager;
 
+    private volatile ArrayList<String> fileRecvH = new ArrayList<>();
+
+    private volatile ArrayList<String> missingLocal = new ArrayList<>();
+    private volatile ArrayList<String> missingRemote = new ArrayList<>();
+    private volatile ArrayList<Pair<String, String>> mismatches = new ArrayList<>();
+
     public void setConnectionManager(ConnectionManager connectionManager) {
         this.connectionManager = connectionManager;
+    }
+
+    public ConnectionManager getConnectionManager() {
+        return connectionManager;
+    }
+
+    public void findMismatchedHashes() {
+        missingLocal.clear();
+        missingRemote.clear();
+        mismatches.clear();
+
+        List<String> cmHashes = connectionManager.getAllHashes();
+
+        for (String remoteHash : fileRecvH)
+            if (!cmHashes.contains(remoteHash)) missingLocal.add(remoteHash);
+
+        for (String localHash : cmHashes)
+            if (!fileRecvH.contains(localHash)) missingRemote.add(localHash);
+
+        int max = Math.max(missingLocal.size(), missingRemote.size());
+        for (int i = 0; i < max; i++) {
+            String r = i < missingLocal.size() ? missingLocal.get(i) : "";
+            String l = i < missingRemote.size() ? missingRemote.get(i) : "";
+            mismatches.add(new Pair<>(r, l));
+        }
+    }
+
+    public ArrayList<String> getMissingLocal() {
+        return missingLocal;
+    }
+
+    public ArrayList<String> getMissingRemote() {
+        return missingRemote;
+    }
+    public ArrayList<Pair<String, String>> getMismatches() {
+        return mismatches;
+    }
+
+    void parseMessage(String message) {
+        System.out.println("[INFO] {oHost pMsg} message:\n" + message);
+        String[] parts = message.split("\n");
+        fileRecvH.addAll(List.of(parts));
+
+
+    }
+
+    void threadConnection() {
+        new Thread(() -> {
+            try (InputStream in = socket.getInputStream()) {
+                byte[] buf = new byte[4096];
+                int len;
+                while ((len = in.read(buf)) != -1) {
+                    String msg = new String(buf, 0, len, StandardCharsets.UTF_8);
+
+                    int cut = msg.indexOf(";;;");
+                    if (cut >= 0) msg = msg.substring(cut + 3);
+
+                    parseMessage(msg);
+                    System.out.println("[RECEIVED] from " + socket.getInetAddress().getHostAddress() + ":" +
+                            socket.getPort() + " :\n" + msg);
+                }
+            } catch (IOException ignored) { }
+        }).start();
     }
 
     private void connectAndConfigure(Inet4Address host, int port) {
@@ -25,17 +96,7 @@ public class OutputHost extends Host {
             socket.setTcpNoDelay(true);
             socket.setKeepAlive(true);
             socket.setReuseAddress(true);
-            new Thread(() -> {
-                try (InputStream in = socket.getInputStream()) {
-                    byte[] buf = new byte[4096];
-                    int len;
-                    while ((len = in.read(buf)) != -1) {
-                        String msg = new String(buf, 0, len, StandardCharsets.UTF_8);
-                        System.out.println("[RECEIVED] from " + getHost() + ":" + getPort() + " :\n" + msg);
-                    }
-                } catch (IOException ignored) {
-                }
-            }).start();
+            threadConnection();
         } catch (IOException e) {
             System.out.println("[ERROR] could not connect to " + host + ":" + port);
         }

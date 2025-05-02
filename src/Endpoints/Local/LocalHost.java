@@ -38,21 +38,15 @@ public class LocalHost extends Host {
         int port = 0;
         int mode = -1;
         for (String arg : args) {
-            mode = switch (arg) {
-                case "-dir" -> 0;
-                case "-port" -> 1;
-                case "-add" -> 2;
-                default -> {
-                    if (mode == 0) {
-                        dir = new File(arg);
-                    } else if (mode == 1) {
-                        port = Integer.parseInt(arg);
-                    } else if (mode == 2) {
-                        endpoints.add(new OutputHost(arg));
-                    }
-                    yield -1;
-                }
-            };
+            if      (arg.equals("-dir"))  { mode = 0; continue; }
+            else if (arg.equals("-port")) { mode = 1; continue; }
+            else if (arg.equals("-add"))  { mode = 2; continue; }
+
+            switch (mode) {
+                case 0 -> dir = new File(arg);
+                case 1 -> port = Integer.parseInt(arg);
+                case 2 -> endpoints.add(new OutputHost(arg));
+            }
         }
         return new Config(endpoints, port, dir);
     }

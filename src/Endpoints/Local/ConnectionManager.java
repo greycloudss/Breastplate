@@ -45,20 +45,29 @@ public class ConnectionManager {
 
     private volatile ArrayList<OutputHost> endpoints = new ArrayList<>();
 
-    private volatile ArrayList<OutputHost> updEndpoints;
-
     private Map<File, Long> fileMap = new HashMap<>();
 
     ArrayList<Pair<File, String>> fileHashPairs = new ArrayList<>();
     ArrayList<String> replaceFiles = new ArrayList<>();
 
-
-
-    private Thread dirScannerThread, mainLoopThread, listenerThread, senderThread;
+    private Thread dirScannerThread, mainLoopThread, listenerThread;
 
     volatile boolean recheck;
 
     volatile boolean killSwitch;
+
+    public ArrayList<String> getAllHashes() {
+        ArrayList<String> hashes = new ArrayList<>();
+
+        for (Pair<File, String> pair : fileHashPairs)
+            hashes.add(pair.Val());
+
+        return hashes;
+    }
+
+    public ArrayList<Pair<File, String>> getFileHashPairs() {
+        return fileHashPairs;
+    }
 
     private String returnHashString(byte[] hash) {
         StringBuilder string = new StringBuilder();
@@ -120,15 +129,15 @@ public class ConnectionManager {
 
                 fileMap = files.stream().collect(Collectors.toMap(f -> f, File::lastModified, Math::max));
 
-                if (oldFileMap.size() == files.size() || fileMap.entrySet().iterator().next() == oldFileMap.entrySet().iterator().next())
+                if (oldFileMap.size() == files.size() && fileMap.entrySet().iterator().next() == oldFileMap.entrySet().iterator().next())
                     continue;
             }
             System.out.println("[Info] {CM scan} Starting scan");
             fileHashPairs.clear();
 
-            for (File loopFile : files)
-                fileHashPairs.add(new Pair<>(loopFile, returnHashString(Objects.requireNonNull(encodeHash256(loopFile)))));
+            for (File loopFile : files) fileHashPairs.add(new Pair<>(loopFile, returnHashString(Objects.requireNonNull(encodeHash256(loopFile)))));
 
+            sendFiles();
 
             recheck = false;
         }
@@ -138,9 +147,7 @@ public class ConnectionManager {
 
     void sendFiles() {
         StringBuilder a = new StringBuilder();
-        for (Pair<File, String> pair : fileHashPairs) {
-            a.append(pair.Val()).append("\n");
-        }
+        for (Pair<File, String> pair : fileHashPairs) a.append(pair.Val()).append("\n");
 
         broadcast(a.toString());
     }
@@ -219,7 +226,7 @@ public class ConnectionManager {
 
             while (!killSwitch) {
                 recheck = endpoints.add(new OutputHost(serverSocket.accept()));
-                if (recheck) endpoints.getLast().setConnectionManager(this);
+                if (recheck && endpoints.getLast().getConnectionManager() == null) endpoints.getLast().setConnectionManager(this);
             }
 
         } catch (Exception e) {
@@ -228,15 +235,48 @@ public class ConnectionManager {
         }
     }
 
-    boolean democracy() {
-        int against = 0;
+    public void democracy() {
+        int n = endpoints.size();
+        int threshold = (n + 1) / 2;
 
-        for (OutputHost endpoint : endpoints) {
-            //add each endpoint disagreement pair of pos and returnHash
+        Map<String, Integer> downloadVotes = new HashMap<>();
+        Map<String, Integer> sendVotes     = new HashMap<>();
+        Map<Pair<String,String>, Integer> replaceVotes = new HashMap<>();
+
+        for (OutputHost peer : endpoints) {
+            peer.setConnectionManager(this);
+            peer.findMismatchedHashes();
+            for (String h : peer.getMissingLocal())   downloadVotes.merge(h, 1, Integer::sum);
+            for (String h : peer.getMissingRemote())  sendVotes   .merge(h, 1, Integer::sum);
+            for (Pair<String,String> p : peer.getMismatches()) replaceVotes.merge(p, 1, Integer::sum);
         }
 
-        return endpoints.size() - against >= against;
+        Map<String, Boolean> downloadDecision = new HashMap<>();
+        Map<String, Boolean> sendDecision     = new HashMap<>();
+        Map<Pair<String,String>, Boolean> replaceDecision = new HashMap<>();
+
+        for (Map.Entry<String,Integer> e : downloadVotes.entrySet()) {
+            downloadDecision.put(e.getKey(), e.getValue() >= threshold);
+        }
+        for (Map.Entry<String,Integer> e : sendVotes.entrySet()) {
+            sendDecision.put(e.getKey(), e.getValue() >= threshold);
+        }
+        for (Map.Entry<Pair<String,String>,Integer> e : replaceVotes.entrySet()) {
+            replaceDecision.put(e.getKey(), e.getValue() >= threshold);
+        }
+
+        List<String> toDownload   = downloadDecision.entrySet().stream()
+                .filter(Map.Entry::getValue).map(Map.Entry::getKey).toList();
+        List<String> toSend       = sendDecision.entrySet().stream()
+                .filter(Map.Entry::getValue).map(Map.Entry::getKey).toList();
+        List<Pair<String,String>> toReplace = replaceDecision.entrySet().stream()
+                .filter(Map.Entry::getValue).map(Map.Entry::getKey).toList();
+
+        // TODO: SFTP download toDownload
+        // TODO: SFTP send     toSend
+        // TODO: SFTP replace  toReplace
     }
+
 
     void mainLoop() {
         while (!killSwitch) {
