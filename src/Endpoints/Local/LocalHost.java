@@ -14,9 +14,8 @@ import static java.net.Inet4Address.*;
 
 public class LocalHost extends Host {
     private final ConnectionManager connectionManager;
-    private boolean[] insight;
+
     private final File directory;
-    private Thread listenerThread, broadcasterThread;
 
 
     private static class Config {
@@ -31,6 +30,9 @@ public class LocalHost extends Host {
         }
     }
 
+    public ConnectionManager getConnectionManager() {
+        return connectionManager;
+    }
 
     private static Config parseArgs(String[] args) {
         List<OutputHost> endpoints = new ArrayList<>();
@@ -38,9 +40,20 @@ public class LocalHost extends Host {
         int port = 0;
         int mode = -1;
         for (String arg : args) {
-            if      (arg.equals("-dir"))  { mode = 0; continue; }
-            else if (arg.equals("-port")) { mode = 1; continue; }
-            else if (arg.equals("-add"))  { mode = 2; continue; }
+            switch (arg) {
+                case "-dir" -> {
+                    mode = 0;
+                    continue;
+                }
+                case "-port" -> {
+                    mode = 1;
+                    continue;
+                }
+                case "-add" -> {
+                    mode = 2;
+                    continue;
+                }
+            }
 
             switch (mode) {
                 case 0 -> dir = new File(arg);
@@ -57,7 +70,6 @@ public class LocalHost extends Host {
         super((Inet4Address) getLocalHost(), cfg.port);
 
         this.directory = cfg.directory;
-        this.insight = new boolean[]{true, true, true};
         this.connectionManager = new ConnectionManager(this, cfg.endpoints);
     }
 
@@ -66,13 +78,6 @@ public class LocalHost extends Host {
     }
 
 
-    void changeInsights(boolean[] newInsights) {
-        insight = newInsights;
-    }
-
-    boolean[] returnOperationalInsight() {
-        return insight;
-    }
 
     @Override
     public Inet4Address getHost() {

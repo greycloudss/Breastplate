@@ -1,57 +1,92 @@
 package Endpoints.Local;
 
-import Endpoints.Node.OutputHost;
-
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class SFTP {
-    Thread sendThread, receiveThread;
-    LocalHost host;
-    volatile ArrayList<Integer> endpointSendIndexes, endpointReceiveIndexes;
+    private static final ExecutorService executor = Executors.newCachedThreadPool();
 
-    boolean send, receive;
-
-    SFTP(LocalHost host) {
-        this.host = host;
-        sendThread = new Thread(this::sendFiles);
-        receiveThread = new Thread(this::receiveFiles);
-
-        sendThread.start();
-        receiveThread.start();
+    public static void downloadFile(String user, String password,
+                                    String host, int port,
+                                    Path localPath, String remotePath) {
+        executor.submit(() ->
+                runSftp(user, password, host, port, "get", remotePath, localPath.toString())
+        );
     }
 
+    public static void uploadFile(String user, String password,
+                                  String host, int port,
+                                  Path localPath, String remotePath) {
+        executor.submit(() ->
+                runSftp(user, password, host, port, "put", localPath.toString(), remotePath)
+        );
+    }
 
+    public static void replaceFile(String user, String password,
+                                   String host, int port,
+                                   Path localPath, String remotePath) {
+        executor.submit(() ->
+                runSftp(user, password, host, port, "get", remotePath, localPath.toString())
+        );
+    }
 
-    public void sendFiles() {
-        while (true) {
-            if (!send) { return; }
-            try {
+    private static void runSftp(String user, String password,
+                                String host, int port,
+                                String command, String source, String destination) {
+        List<String> cmd = new ArrayList<>();
+        if (!password.isEmpty()) {
+            cmd.add("sshpass");
+            cmd.add("-p");
+            cmd.add(password);
+        }
+        cmd.add("sftp");
+        cmd.add("-P");
+        cmd.add(String.valueOf(port));
+        cmd.add(user + "@" + host);
 
-            } catch (Exception e) {
-                System.out.println("[ERROR] {SFTP send} unable to send files");
+        ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true);
+
+        try {
+            Process proc = pb.start();
+            try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(proc.getOutputStream()));
+                 BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
+
+                writer.write(command + " " + source + " " + destination + "\n");
+                writer.write("bye\n");
+                writer.flush();
+
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    System.out.println("[INFO] {SFTP} " + line);
+                }
             }
-            send = false;
+
+            int code = proc.waitFor();
+            if (code != 0) {
+                System.err.println("[ERROR] {SFTP} exited with code " + code);
+            }
+        } catch (IOException | InterruptedException e) {
+            System.err.println("[ERROR] {SFTP} error: " + e.getMessage());
         }
     }
 
-    public boolean checkEndpointPerms() {
-
-        // basically check if the endpoint is allowed to be
-        // sending data to us to avoid hosts sending possibly spicy content
-
-        return false;
-    }
-
-    public void receiveFiles() {
-        while (true) {
-            if (!receive) { return; }
-            try {
-
-            } catch (Exception e) {
-                System.out.println("[ERROR] {SFTP receive} unable to send files");
+    public static void shutdown() {
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
             }
-            receive = false;
-            endpointReceiveIndexes.clear();
+        } catch (InterruptedException ignored) {
+            executor.shutdownNow();
         }
     }
 }

@@ -3,7 +3,9 @@ package Endpoints.Node;
 import Endpoints.Host;
 import Endpoints.Local.ConnectionManager;
 import helpers.Pair;
+import helpers.SSLUtil;
 
+import javax.net.ssl.SSLSocket;
 import java.io.InputStream;
 import java.io.IOException;
 import java.net.*;
@@ -91,7 +93,8 @@ public class OutputHost extends Host {
 
     private void connectAndConfigure(Inet4Address host, int port) {
         try {
-            this.socket = new Socket(host, port);
+            this.socket = (SSLSocket) SSLUtil.clientFactory().createSocket(host, port);
+            ((SSLSocket)socket).startHandshake();
             socket.setSoTimeout(10000);
             socket.setTcpNoDelay(true);
             socket.setKeepAlive(true);

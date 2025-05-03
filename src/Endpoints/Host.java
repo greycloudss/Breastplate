@@ -82,8 +82,4 @@ public abstract class Host {
     public List<byte[]> getFiles() {
         return files;
     }
-
-    public void setFiles(List<byte[]> files) {
-        this.files = files;
-    }
 }

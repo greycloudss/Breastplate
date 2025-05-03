@@ -2,7 +2,10 @@ package Endpoints.Local;
 
 import Endpoints.Node.OutputHost;
 import helpers.Pair;
+import helpers.SSLUtil;
 
+import javax.net.ssl.SSLServerSocket;
+import javax.net.ssl.SSLSocket;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -55,6 +58,17 @@ public class ConnectionManager {
     volatile boolean recheck;
 
     volatile boolean killSwitch;
+
+    private String sshUser;
+    private String sshPass = "";
+
+    public void setSshUser(String sshUser) {
+        this.sshUser = sshUser;
+    }
+
+    public void setSshPass(String sshPass) {
+        this.sshPass = sshPass;
+    }
 
     public ArrayList<String> getAllHashes() {
         ArrayList<String> hashes = new ArrayList<>();
@@ -186,30 +200,31 @@ public class ConnectionManager {
     }
 
 
-    void broadcast(String output) {
-        StringBuilder outputBuilder = new StringBuilder(output);
+    void broadcast(String payload) {
         List<OutputHost> removables = new ArrayList<>();
 
         for (OutputHost endpoint : endpoints) {
             Socket socket = endpoint.getSocket();
-
             if (socket == null || socket.isClosed()) {
                 removables.add(endpoint);
                 continue;
             }
 
-            outputBuilder.insert(0, endpoint.getHost() + ":" + endpoint.getPort() + ";;;");
+            String tagged = endpoint.getHost() + ":" + endpoint.getPort() + ";;;" + payload;
 
             try {
-                socket.getOutputStream().write(outputBuilder.toString().getBytes());
+                socket.getOutputStream().write(tagged.getBytes());
                 socket.getOutputStream().flush();
             } catch (IOException e) {
-                System.out.println("[ERROR] {SendFunc} were not able to initiate connection with: " + endpoint.getHost() + ":" + endpoint.getPort());
+                System.out.println("[ERROR] {SendFunc} could not send to: "
+                        + endpoint.getHost() + ":" + endpoint.getPort());
+                removables.add(endpoint);
             }
         }
 
         endpoints.removeAll(removables);
     }
+
 
     private void closeSockets() {
         for (OutputHost endpoint : endpoints) {
@@ -220,20 +235,23 @@ public class ConnectionManager {
 
     void listen() {
         if (killSwitch || host == null) return;
-
-        try (ServerSocket serverSocket = new ServerSocket(host.getPort())) {
+        try (SSLServerSocket serverSocket = (SSLServerSocket) SSLUtil.serverFactory().createServerSocket(host.getPort())) {
             serverSocket.setReuseAddress(true);
-
             while (!killSwitch) {
-                recheck = endpoints.add(new OutputHost(serverSocket.accept()));
-                if (recheck && endpoints.getLast().getConnectionManager() == null) endpoints.getLast().setConnectionManager(this);
+                SSLSocket s = (SSLSocket)serverSocket.accept();
+                endpoints.add(new OutputHost(s));
+                if (endpoints.getLast().getConnectionManager()==null)
+                    endpoints.getLast().setConnectionManager(this);
             }
-
         } catch (Exception e) {
-            System.err.println("[ERROR] {CM listen} could not bind server socket on port " + host.getPort());
-
+            System.err.println("[ERROR] {CM listen} could not bind SSL server socket on port " + host.getPort());
         }
     }
+
+    private File lookupLocalFile(String hash) {
+        return new File(host.getDirectory(), hash);
+    }
+
 
     public void democracy() {
         int n = endpoints.size();
@@ -241,40 +259,50 @@ public class ConnectionManager {
 
         Map<String, Integer> downloadVotes = new HashMap<>();
         Map<String, Integer> sendVotes     = new HashMap<>();
-        Map<Pair<String,String>, Integer> replaceVotes = new HashMap<>();
+        Map<Pair<String, String>, Integer> replaceVotes = new HashMap<>();
 
         for (OutputHost peer : endpoints) {
             peer.setConnectionManager(this);
             peer.findMismatchedHashes();
             for (String h : peer.getMissingLocal())   downloadVotes.merge(h, 1, Integer::sum);
-            for (String h : peer.getMissingRemote())  sendVotes   .merge(h, 1, Integer::sum);
-            for (Pair<String,String> p : peer.getMismatches()) replaceVotes.merge(p, 1, Integer::sum);
+            for (String h : peer.getMissingRemote())  sendVotes.merge(h, 1, Integer::sum);
+            for (Pair<String, String> p : peer.getMismatches()) replaceVotes.merge(p, 1, Integer::sum);
         }
 
-        Map<String, Boolean> downloadDecision = new HashMap<>();
-        Map<String, Boolean> sendDecision     = new HashMap<>();
-        Map<Pair<String,String>, Boolean> replaceDecision = new HashMap<>();
+        List<String> toDownload = downloadVotes.entrySet().stream()
+                .filter(e -> e.getValue() >= threshold)
+                .map(Map.Entry::getKey)
+                .toList();
 
-        for (Map.Entry<String,Integer> e : downloadVotes.entrySet()) {
-            downloadDecision.put(e.getKey(), e.getValue() >= threshold);
-        }
-        for (Map.Entry<String,Integer> e : sendVotes.entrySet()) {
-            sendDecision.put(e.getKey(), e.getValue() >= threshold);
-        }
-        for (Map.Entry<Pair<String,String>,Integer> e : replaceVotes.entrySet()) {
-            replaceDecision.put(e.getKey(), e.getValue() >= threshold);
-        }
+        List<String> toSend = sendVotes.entrySet().stream()
+                .filter(e -> e.getValue() >= threshold)
+                .map(Map.Entry::getKey)
+                .toList();
 
-        List<String> toDownload   = downloadDecision.entrySet().stream()
-                .filter(Map.Entry::getValue).map(Map.Entry::getKey).toList();
-        List<String> toSend       = sendDecision.entrySet().stream()
-                .filter(Map.Entry::getValue).map(Map.Entry::getKey).toList();
-        List<Pair<String,String>> toReplace = replaceDecision.entrySet().stream()
-                .filter(Map.Entry::getValue).map(Map.Entry::getKey).toList();
+        List<Pair<String, String>> toReplace = replaceVotes.entrySet().stream()
+                .filter(e -> e.getValue() >= threshold)
+                .map(Map.Entry::getKey)
+                .toList();
 
-        // TODO: SFTP download toDownload
-        // TODO: SFTP send     toSend
-        // TODO: SFTP replace  toReplace
+        for (OutputHost peer : endpoints) {
+            String peerHost = peer.getHost().getHostAddress();
+            int peerPort    = peer.getPort();
+            for (String hash : toDownload) {
+                File f = lookupLocalFile(hash);
+                SFTP.downloadFile(sshUser, sshPass, peerHost, peerPort,
+                        f.toPath(), "/remote/dir/" + hash);
+            }
+            for (String hash : toSend) {
+                File f = lookupLocalFile(hash);
+                SFTP.uploadFile(sshUser, sshPass, peerHost, peerPort,
+                        f.toPath(), "/remote/dir/" + hash);
+            }
+            for (Pair<String, String> p : toReplace) {
+                File f = lookupLocalFile(p.Key());
+                SFTP.replaceFile(sshUser, sshPass, peerHost, peerPort,
+                        f.toPath(), "/remote/dir/" + p.Val());
+            }
+        }
     }
 
 
