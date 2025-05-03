@@ -2,9 +2,8 @@
 
 Breastplate is a **peer‑to‑peer, self‑healing file‑synchronisation layer** for local folders. Each node continuously scans its directory, exchanges SHA‑256 hashes with its peers and decides—by majority vote—whether to **download, send or replace** files until every replica converges.
 
+> Part of the **Armourer** series of projects.  
 > **Work in Progress**
-> Part of the **Armourer** series of projects.
-
 ---
 
 ## Requirements
