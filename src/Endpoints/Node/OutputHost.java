@@ -78,10 +78,10 @@ public class OutputHost extends Host {
                 byte[] buf = new byte[4096];
                 int len;
                 while ((len = in.read(buf)) != -1) {
-                    String msg = new String(buf, 0, len, StandardCharsets.UTF_8);
+                    String raw = new String(buf, 0, len, StandardCharsets.UTF_8);
 
-                    int cut = msg.indexOf(";;;");
-                    if (cut >= 0) msg = msg.substring(cut + 3);
+                    String[] parts = raw.split(";;;", 2);
+                    String msg = parts.length > 1 ? parts[1] : "";
 
                     parseMessage(msg);
                     System.out.println("[RECEIVED] from " + socket.getInetAddress().getHostAddress() + ":" +

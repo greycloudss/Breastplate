@@ -183,8 +183,9 @@ public class ConnectionManager {
 
         for (int i = 0; i < 3; i++) {
             try {
-                endpoint.getSocket().getOutputStream().write(output.getBytes());
-                endpoint.getSocket().getOutputStream().flush(); // subject for change
+                DataOutputStream a = new DataOutputStream(endpoint.getSocket().getOutputStream());
+                a.writeUTF(output);
+                a.flush();
 
             } catch (Exception e) {
                 System.out.println("[ERROR] {CM unicast} failed to write to socket");
@@ -201,7 +202,6 @@ public class ConnectionManager {
         return true;
     }
 
-
     void broadcast(String payload) {
         List<OutputHost> removables = new ArrayList<>();
 
@@ -215,8 +215,11 @@ public class ConnectionManager {
             String tagged = endpoint.getHost() + ":" + endpoint.getPort() + ";;;" + payload;
 
             try {
-                socket.getOutputStream().write(tagged.getBytes());
-                socket.getOutputStream().flush();
+
+                DataOutputStream a = new DataOutputStream(socket.getOutputStream());
+                a.writeUTF(tagged);
+                a.flush();
+
             } catch (IOException e) {
                 System.out.println("[ERROR] {SendFunc} could not send to: "
                         + endpoint.getHost() + ":" + endpoint.getPort());
