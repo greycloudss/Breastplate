@@ -72,24 +72,35 @@ public class OutputHost extends Host {
 
     }
 
-    void threadConnection() {
+    private void threadConnection() {
         new Thread(() -> {
             try (InputStream in = socket.getInputStream()) {
                 byte[] buf = new byte[4096];
                 int len;
+                StringBuilder buffer = new StringBuilder();
+
                 while ((len = in.read(buf)) != -1) {
-                    String raw = new String(buf, 0, len, StandardCharsets.UTF_8);
+                    buffer.append(new String(buf, 0, len, StandardCharsets.UTF_8));
 
-                    String[] parts = raw.split(";;;", 2);
-                    String msg = parts.length > 1 ? parts[1] : "";
+                    int idx;
+                    while ((idx = buffer.indexOf("\n")) != -1) {
+                        String line = buffer.substring(0, idx).trim();
+                        buffer.delete(0, idx + 1);
 
-                    parseMessage(msg);
-                    System.out.println("[RECEIVED] from " + socket.getInetAddress().getHostAddress() + ":" +
-                            socket.getPort() + " :\n" + msg);
+                        if (line.contains(";;;")) {
+                            line = line.substring(line.lastIndexOf(";;;") + 3);
+                        }
+
+                        if (!line.isEmpty()) {
+                            fileRecvH.add(line);
+                        }
+                    }
                 }
             } catch (IOException ignored) { }
         }).start();
     }
+
+
 
     private void connectAndConfigure(Inet4Address host, int port) {
         try {
@@ -111,29 +122,24 @@ public class OutputHost extends Host {
         connectThread.start();
     }
 
-    public OutputHost(Socket socket) {
-        super(socket);
+    void configureSocket(Socket socket) {
         try {
             socket.setSoTimeout(10000);
             socket.setTcpNoDelay(true);
             socket.setKeepAlive(true);
-        } catch (SocketException e) {
-            throw new RuntimeException(e);
+        } catch (Exception e) {
+            System.out.println("[ERROR] {oHost config} failed to config socket" + this.getHost() + ":" + this.getPort());
         }
+    }
+
+    public OutputHost(Socket socket) {
+        super(socket);
+        configureSocket(socket);
         this.socket = socket;
-        new Thread(() -> {
-            try (InputStream in = socket.getInputStream()) {
-                byte[] buf = new byte[4096];
-                int len;
-                while ((len = in.read(buf)) != -1) {
-                    String msg = new String(buf, 0, len, StandardCharsets.UTF_8);
-                    System.out.println("[RECEIVED] from " + getHost() + ":" + getPort() + " : " + msg);
-                }
-            } catch (IOException ignored) {
-            }
-        }).start();
+        threadConnection();
         connectThread = null;
     }
+
 
     public OutputHost(String ep) {
         super(ep);
