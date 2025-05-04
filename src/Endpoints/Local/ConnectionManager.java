@@ -153,6 +153,7 @@ public class ConnectionManager {
             for (File loopFile : files) fileHashPairs.add(new Pair<>(loopFile, returnHashString(Objects.requireNonNull(encodeHash256(loopFile)))));
 
             sendFiles();
+            democracy();
 
             recheck = false;
         }
@@ -287,7 +288,7 @@ public class ConnectionManager {
 
         for (OutputHost peer : endpoints) {
             String peerHost = peer.getHost().getHostAddress();
-            int peerPort    = peer.getPort();
+            int peerPort    = 22;
             for (String hash : toDownload) {
                 File f = lookupLocalFile(hash);
                 SFTP.downloadFile(sshUser, sshPass, peerHost, peerPort,

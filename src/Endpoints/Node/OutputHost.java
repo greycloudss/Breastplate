@@ -151,6 +151,7 @@ public class OutputHost extends Host {
             try {
                 s.close();
             } catch (IOException ignored) {
+                System.out.println("[ERROR] could not close socket: " + s.getInetAddress().getHostAddress() + ":" + s.getPort());
             }
         }
     }
