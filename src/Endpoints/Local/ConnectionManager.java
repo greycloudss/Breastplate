@@ -240,18 +240,25 @@ public class ConnectionManager {
 
     void listen() {
         if (killSwitch || host == null) return;
-        try (SSLServerSocket serverSocket = (SSLServerSocket) SSLUtil.serverFactory().createServerSocket(host.getPort())) {
+        if (host.getPort() <= 0) {
+            System.out.println("[INFO] Passive mode: not listening (no valid port)");
+            return;
+        }
+        try (SSLServerSocket serverSocket =
+                     (SSLServerSocket) SSLUtil.serverFactory().createServerSocket(host.getPort())) {
             serverSocket.setReuseAddress(true);
             while (!killSwitch) {
-                SSLSocket s = (SSLSocket)serverSocket.accept();
-                endpoints.add(new OutputHost(s));
-                if (endpoints.getLast().getConnectionManager()==null)
-                    endpoints.getLast().setConnectionManager(this);
+                SSLSocket s = (SSLSocket) serverSocket.accept();
+                OutputHost newPeer = new OutputHost(s);
+                newPeer.setConnectionManager(this);
+                endpoints.add(newPeer);
+                this.forceRecheck();  // trigger sync now that a new peer is connected
             }
         } catch (Exception e) {
-            System.err.println("[ERROR] {CM listen} could not bind SSL server socket on port " + host.getPort());
+            System.err.println("[ERROR] {CM listen} Failed to bind SSL server on port " + host.getPort());
         }
     }
+
 
     private File lookupLocalFile(String hash) {
         return new File(host.getDirectory(), hash);
@@ -259,19 +266,26 @@ public class ConnectionManager {
 
 
     public void democracy() {
+        // Remove any peers whose socket has closed
+        endpoints.removeIf(peer -> {
+            Socket s = peer.getSocket();
+            return (s == null || s.isClosed());
+        });
+
         int n = endpoints.size();
+        if (n == 0) return;
+
         int threshold = (n + 1) / 2;
 
         Map<String, Integer> downloadVotes = new HashMap<>();
-        Map<String, Integer> sendVotes     = new HashMap<>();
-        Map<Pair<String, String>, Integer> replaceVotes = new HashMap<>();
+        Map<String, Integer> uploadVotes   = new HashMap<>();
+
 
         for (OutputHost peer : endpoints) {
             peer.setConnectionManager(this);
             peer.findMismatchedHashes();
             for (String h : peer.getMissingLocal())   downloadVotes.merge(h, 1, Integer::sum);
-            for (String h : peer.getMissingRemote())  sendVotes.merge(h, 1, Integer::sum);
-            for (Pair<String, String> p : peer.getMismatches()) replaceVotes.merge(p, 1, Integer::sum);
+            for (String h : peer.getMissingRemote())  uploadVotes.merge(h, 1, Integer::sum);
         }
 
         List<String> toDownload = downloadVotes.entrySet().stream()
@@ -279,37 +293,28 @@ public class ConnectionManager {
                 .map(Map.Entry::getKey)
                 .toList();
 
-        List<String> toSend = sendVotes.entrySet().stream()
+        List<String> toUpload = uploadVotes.entrySet().stream()
                 .filter(e -> e.getValue() >= threshold)
                 .map(Map.Entry::getKey)
                 .toList();
 
-        List<Pair<String, String>> toReplace = replaceVotes.entrySet().stream()
-                .filter(e -> e.getValue() >= threshold)
-                .map(Map.Entry::getKey)
-                .toList();
-
+        String remoteDirName = host.getDirectory().getName() + "/";
         for (OutputHost peer : endpoints) {
-            String peerHost = peer.getHost().getHostAddress();
-            int peerPort    = 22;
+            String peerAddr = peer.getHost().getHostAddress();
+            int sshPort = 22;
+
             for (String hash : toDownload) {
                 File f = lookupLocalFile(hash);
-                SFTP.downloadFile(sshUser, sshPass, peerHost, peerPort,
-                        f.toPath(), "/remote/dir/" + hash);
+                SFTP.downloadFile(sshUser, sshPass, peerAddr, sshPort,
+                        f.toPath(), remoteDirName + hash);
             }
-            for (String hash : toSend) {
+            for (String hash : toUpload) {
                 File f = lookupLocalFile(hash);
-                SFTP.uploadFile(sshUser, sshPass, peerHost, peerPort,
-                        f.toPath(), "/remote/dir/" + hash);
-            }
-            for (Pair<String, String> p : toReplace) {
-                File f = lookupLocalFile(p.Key());
-                SFTP.replaceFile(sshUser, sshPass, peerHost, peerPort,
-                        f.toPath(), "/remote/dir/" + p.Val());
+                SFTP.uploadFile(sshUser, sshPass, peerAddr, sshPort,
+                        f.toPath(), remoteDirName + hash);
             }
         }
     }
-
 
     void mainLoop() {
         while (!killSwitch) {

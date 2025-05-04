@@ -44,13 +44,9 @@ public class SFTP {
                                 String command, String source, String destination) {
         List<String> cmd = new ArrayList<>();
         if (!password.isEmpty()) {
-            cmd.add("sshpass");
-            cmd.add("-p");
-            cmd.add(password);
+            cmd.add("sshpass"); cmd.add("-p"); cmd.add(password);
         }
-        cmd.add("sftp");
-        cmd.add("-P");
-        cmd.add(String.valueOf(port));
+        cmd.add("sftp"); cmd.add("-P"); cmd.add(String.valueOf(port));
         cmd.add(user + "@" + host);
 
         ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true);
@@ -59,6 +55,11 @@ public class SFTP {
             Process proc = pb.start();
             try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(proc.getOutputStream()));
                  BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
+
+                if ("put".equals(command)) {
+                    String dir = destination.substring(0, destination.lastIndexOf('/'));
+                    writer.write("mkdir " + dir + "\n");
+                }
 
                 writer.write(command + " " + source + " " + destination + "\n");
                 writer.write("bye\n");
@@ -78,6 +79,7 @@ public class SFTP {
             System.err.println("[ERROR] {SFTP} error: " + e.getMessage());
         }
     }
+
 
     public static void shutdown() {
         executor.shutdown();
