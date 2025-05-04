@@ -37,5 +37,5 @@ bin/
 *.zip
 *.rar
 *.7zip
-
+*.jks
 .idea

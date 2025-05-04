@@ -22,11 +22,14 @@ public class LocalHost extends Host {
         final List<OutputHost> endpoints;
         final int port;
         final File directory;
+        final String pass, user;
 
-        Config(List<OutputHost> endpoints, int port, File directory) {
+        Config(List<OutputHost> endpoints, int port, File directory, String user, String pass) {
             this.endpoints = endpoints;
             this.port = port;
             this.directory = directory;
+            this.pass = pass;
+            this.user = user;
         }
     }
 
@@ -39,6 +42,9 @@ public class LocalHost extends Host {
         File dir = null;
         int port = 0;
         int mode = -1;
+        String user = System.getProperty("user.name");
+        String pass = "";
+
         for (String arg : args) {
             switch (arg) {
                 case "-dir" -> {
@@ -53,31 +59,41 @@ public class LocalHost extends Host {
                     mode = 2;
                     continue;
                 }
+                case "-user" -> {
+                    mode = 3;
+                    continue;
+                }
+                case "-password" -> {
+                    mode = 4;
+                    continue;
+                }
+
             }
 
             switch (mode) {
                 case 0 -> dir = new File(arg);
                 case 1 -> port = Integer.parseInt(arg);
                 case 2 -> endpoints.add(new OutputHost(arg));
+                case 3 -> user = arg;
+                case 4 -> pass = arg;
             }
         }
-        return new Config(endpoints, port, dir);
+        return new Config(endpoints, port, dir, user, pass);
     }
 
 
     public LocalHost(String[] args) throws UnknownHostException {
+
         Config cfg = parseArgs(args);
         super((Inet4Address) getLocalHost(), cfg.port);
 
         this.directory = cfg.directory;
-        this.connectionManager = new ConnectionManager(this, cfg.endpoints);
+        this.connectionManager = new ConnectionManager(this, cfg.endpoints, cfg.user, cfg.pass);
     }
 
     public File getDirectory() {
         return directory;
     }
-
-
 
     @Override
     public Inet4Address getHost() {

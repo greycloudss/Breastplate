@@ -79,6 +79,7 @@ public class ConnectionManager {
         return hashes;
     }
 
+
     public ArrayList<Pair<File, String>> getFileHashPairs() {
         return fileHashPairs;
     }
@@ -332,7 +333,7 @@ public class ConnectionManager {
     }
 
 
-    ConnectionManager(LocalHost localHost, List<OutputHost> endpoints) {
+    ConnectionManager(LocalHost localHost, List<OutputHost> endpoints, String user, String pass) {
         this.endpoints.addAll(endpoints);
 
         for (OutputHost endpoint : endpoints)
@@ -353,7 +354,7 @@ public class ConnectionManager {
 
     }
 
-    ConnectionManager(LocalHost localHost) {
+    ConnectionManager(LocalHost localHost, String user, String pass) {
         recheck = true;
         host = localHost;
 

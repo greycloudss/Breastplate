@@ -3,6 +3,7 @@ package helpers;
 import javax.net.ssl.*;
 import java.io.FileInputStream;
 import java.security.KeyStore;
+import java.security.SecureRandom;
 
 public class SSLUtil {
     private static SSLServerSocketFactory serverFactory;
@@ -10,17 +11,23 @@ public class SSLUtil {
 
     static {
         try {
+            String ksPath = System.getProperty("javax.net.ssl.keyStore", "keystore.jks");
+            char[] ksPass = System.getProperty("javax.net.ssl.keyStorePassword", "changeit")
+                    .toCharArray();
+
             KeyStore ks = KeyStore.getInstance("JKS");
-            ks.load(new FileInputStream("keystore.jks"), "changeit".toCharArray());
+            try (FileInputStream fis = new FileInputStream(ksPath)) {
+                ks.load(fis, ksPass);
+            }
 
             KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
-            kmf.init(ks, "changeit".toCharArray());
+            kmf.init(ks, ksPass);
 
             TrustManagerFactory tmf = TrustManagerFactory.getInstance("SunX509");
             tmf.init(ks);
 
             SSLContext ctx = SSLContext.getInstance("TLS");
-            ctx.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+            ctx.init(kmf.getKeyManagers(), tmf.getTrustManagers(), new SecureRandom());
 
             serverFactory = ctx.getServerSocketFactory();
             clientFactory = ctx.getSocketFactory();
