@@ -85,12 +85,12 @@ public class OutputHost extends Host {
                         String line = buffer.substring(0, idx).trim();
                         buffer.delete(0, idx + 1);
 
-                        System.out.println("[RECEIVED] from " + socket.getInetAddress().getHostAddress() + ":" + socket.getPort() + " : " + line);
-
                         if (line.contains(";;;")) {
                             fileRecvH.clear();
                             line = line.substring(line.lastIndexOf(";;;") + 3);
                         }
+
+                        System.out.println("[RECEIVED] from " + socket.getInetAddress().getHostAddress() + ":" + socket.getPort() + " : " + line);
 
                         line = line.trim();
                         if (!line.isEmpty() && line.matches("[0-9a-fA-F]{64}")) {

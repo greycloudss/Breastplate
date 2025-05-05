@@ -301,7 +301,7 @@ public class ConnectionManager {
         String remoteDirName = host.getDirectory().getName() + "/";
         for (OutputHost peer : endpoints) {
             String peerAddr = peer.getHost().getHostAddress();
-            int sshPort = 22;
+            int sshPort = peer.getPort();
 
             for (String hash : toDownload) {
                 File f = lookupLocalFile(hash);
