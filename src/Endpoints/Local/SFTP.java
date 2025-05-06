@@ -6,6 +6,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -40,28 +41,50 @@ public class SFTP {
     }
 
     private static void runSftp(String user, String password,
-                                String host, int port,
+                                String host, int ignoredPort,
                                 String command, String source, String destination) {
+        int sshPort = 22;
+        boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
+        boolean useSshpass = !password.isEmpty() && !isWindows;
+        String knownHostsFile = isWindows ? "NUL" : "/dev/null";
+
         List<String> cmd = new ArrayList<>();
-        if (!password.isEmpty()) {
-            cmd.add("sshpass"); cmd.add("-p"); cmd.add(password);
+        if (useSshpass) {
+            cmd.add("sshpass");
+            cmd.add("-p");
+            cmd.add(password);
         }
-        cmd.add("sftp"); cmd.add("-P"); cmd.add(String.valueOf(port));
+        cmd.add("sftp");
+        cmd.add("-q");
+        cmd.add("-oBatchMode=no");
+        cmd.add("-oStrictHostKeyChecking=no");
+        cmd.add("-oUserKnownHostsFile=" + knownHostsFile);
+        cmd.add("-oPort=" + sshPort);
         cmd.add(user + "@" + host);
+
+        System.out.println("[DEBUG] SFTP cmd: " + String.join(" ", cmd));
 
         ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true);
 
         try {
             Process proc = pb.start();
-            try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(proc.getOutputStream()));
-                 BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
+            try (var writer = new BufferedWriter(new OutputStreamWriter(proc.getOutputStream()));
+                 var reader = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
 
-                if ("put".equals(command)) {
-                    String dir = destination.substring(0, destination.lastIndexOf('/'));
-                    writer.write("mkdir " + dir + "\n");
+                String remoteDir = destination.contains("/")
+                        ? destination.substring(0, destination.lastIndexOf('/'))
+                        : "";
+                if (!remoteDir.isEmpty()) {
+                    writer.write("mkdir " + remoteDir + "\n");
+                    writer.write("cd "    + remoteDir + "\n");
                 }
-
-                writer.write(command + " " + source + " " + destination + "\n");
+                String baseName = Paths.get(command.equals("put") ? source : destination)
+                        .getFileName().toString();
+                if ("put".equals(command)) {
+                    writer.write("put " + source + " " + baseName + "\n");
+                } else {
+                    writer.write("get " + baseName + " " + destination + "\n");
+                }
                 writer.write("bye\n");
                 writer.flush();
 
@@ -79,6 +102,8 @@ public class SFTP {
             System.err.println("[ERROR] {SFTP} error: " + e.getMessage());
         }
     }
+
+
 
 
     public static void shutdown() {

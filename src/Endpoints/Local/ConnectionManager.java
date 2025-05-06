@@ -48,6 +48,8 @@ public class ConnectionManager {
 
     private volatile ArrayList<OutputHost> endpoints = new ArrayList<>();
 
+    String user, pass;
+
     private Map<File, Long> fileMap = new HashMap<>();
 
     ArrayList<Pair<File, String>> fileHashPairs = new ArrayList<>();
@@ -58,17 +60,6 @@ public class ConnectionManager {
     volatile boolean recheck;
 
     volatile boolean killSwitch;
-
-    private String sshUser;
-    private String sshPass = "";
-
-    public void setSshUser(String sshUser) {
-        this.sshUser = sshUser;
-    }
-
-    public void setSshPass(String sshPass) {
-        this.sshPass = sshPass;
-    }
 
     public ArrayList<String> getAllHashes() {
         ArrayList<String> hashes = new ArrayList<>();
@@ -252,7 +243,7 @@ public class ConnectionManager {
                 OutputHost newPeer = new OutputHost(s);
                 newPeer.setConnectionManager(this);
                 endpoints.add(newPeer);
-                this.forceRecheck();  // trigger sync now that a new peer is connected
+                this.forceRecheck();
             }
         } catch (Exception e) {
             System.err.println("[ERROR] {CM listen} Failed to bind SSL server on port " + host.getPort());
@@ -266,7 +257,6 @@ public class ConnectionManager {
 
 
     public void democracy() {
-        // Remove any peers whose socket has closed
         endpoints.removeIf(peer -> {
             Socket s = peer.getSocket();
             return (s == null || s.isClosed());
@@ -301,16 +291,16 @@ public class ConnectionManager {
         String remoteDirName = host.getDirectory().getName() + "/";
         for (OutputHost peer : endpoints) {
             String peerAddr = peer.getHost().getHostAddress();
-            int sshPort = peer.getPort();
+
 
             for (String hash : toDownload) {
                 File f = lookupLocalFile(hash);
-                SFTP.downloadFile(sshUser, sshPass, peerAddr, sshPort,
+                SFTP.downloadFile(user, pass, peerAddr, 22,
                         f.toPath(), remoteDirName + hash);
             }
             for (String hash : toUpload) {
                 File f = lookupLocalFile(hash);
-                SFTP.uploadFile(sshUser, sshPass, peerAddr, sshPort,
+                SFTP.uploadFile(user, pass, peerAddr, 22,
                         f.toPath(), remoteDirName + hash);
             }
         }
@@ -351,6 +341,9 @@ public class ConnectionManager {
         recheck = true;
         host = localHost;
 
+        this.user = user;
+        this.pass = pass;
+
         killSwitch = false;
 
         dirScannerThread = new Thread(this::recursiveScan);
@@ -366,6 +359,9 @@ public class ConnectionManager {
     ConnectionManager(LocalHost localHost, String user, String pass) {
         recheck = true;
         host = localHost;
+
+        this.user = user;
+        this.pass = pass;
 
         killSwitch = false;
 
