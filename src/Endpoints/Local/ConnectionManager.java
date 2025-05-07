@@ -296,7 +296,8 @@ public class ConnectionManager {
                 .filter(e -> e.getValue() >= threshold)
                 .map(Map.Entry::getKey).toList();
 
-        Path projRoot = host.getDirectory().toPath().getParent();
+        Path dir   = host.getDirectory().toPath();
+        String top = dir.getParent().getFileName().toString();
 
         for (OutputHost peer : endpoints) {
             String addr = peer.getHost().getHostAddress();
@@ -305,7 +306,8 @@ public class ConnectionManager {
                 String rel = peer.getPathForHash(h);
                 if (rel == null) continue;
                 rel = rel.replaceFirst("^/*", "");
-                Path localDst = projRoot.resolve(rel);
+                Path localDst = dir.getParent().getParent()
+                        .resolve(rel);
                 SFTP.downloadFile(user, pass, addr, 22, localDst, rel);
             }
 
@@ -315,9 +317,10 @@ public class ConnectionManager {
 
                 String rel = peer.getPathForHash(h);
                 if (rel == null) {
-                    rel = projRoot.relativize(f.toPath())
+                    String inner = dir.relativize(f.toPath())
                             .toString()
                             .replace('\\','/');
+                    rel = top + "/" + inner;
                 } else {
                     rel = rel.replaceFirst("^/*", "");
                 }
