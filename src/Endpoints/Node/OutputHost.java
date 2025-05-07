@@ -83,16 +83,18 @@ public class OutputHost extends Host {
         for (String l : lines) {
             l = l.trim();
             if (l.isEmpty()) continue;
+
             int bar = l.lastIndexOf('|');
             if (bar < 0) continue;
 
-            String rel  = l.substring(0, bar);
+            String rel  = l.substring(0, bar).replaceFirst("^/+", "");
             String hash = l.substring(bar + 1);
 
             recvPairs.add(new Pair<>(rel, hash));
             fileRecvH.add(hash);
         }
     }
+
 
     private void threadConnection() {
         new Thread(() -> {
