@@ -297,7 +297,7 @@ public class ConnectionManager {
                 String rPath = peer.getPathForHash(h);
                 if (rPath == null) continue;
                 Path localDst = host.getDirectory().toPath().resolve(rPath);
-                SFTP.downloadFile(user, pass, addr, 22,          // ↓ src on peer, dst here
+                SFTP.downloadFile(user, pass, addr, 22,
                         localDst, rPath);
             }
             for (String h : toUpload) {

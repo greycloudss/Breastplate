@@ -63,8 +63,16 @@ public class OutputHost extends Host {
     public ArrayList<String> getMissingRemote() {
         return missingRemote;
     }
+
     public ArrayList<Pair<String, String>> getMismatches() {
         return mismatches;
+    }
+
+    public String getPathForHash(String hash) {
+        for (Pair<String,String> p : recvPairs)
+            if (p.Val().equals(hash))
+                return p.Key();
+        return null;
     }
 
     void parseMessage(String msg) {
@@ -109,6 +117,8 @@ public class OutputHost extends Host {
                         System.out.println("[RECEIVED] from " + socket.getInetAddress().getHostAddress() + ":" + socket.getPort() + " : " + line);
 
                         line = line.trim();
+                        parseMessage(line);
+
                         if (!line.isEmpty() && line.matches("[0-9a-fA-F]{64}")) {
                             fileRecvH.add(line);
                         }
