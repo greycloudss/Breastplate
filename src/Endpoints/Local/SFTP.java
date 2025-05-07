@@ -5,6 +5,7 @@ import java.io.BufferedWriter;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -32,17 +33,10 @@ public class SFTP {
         );
     }
 
-    public static void replaceFile(String user, String password,
-                                   String host, int port,
-                                   Path localPath, String remotePath) {
-        executor.submit(() ->
-                runSftp(user, password, host, port, "get", remotePath, localPath.toString())
-        );
-    }
-
     private static void runSftp(String user, String password,
                                 String host, int ignoredPort,
                                 String command, String source, String destination) {
+
         int sshPort = 22;
         boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
         boolean useSshpass = !password.isEmpty() && !isWindows;
@@ -50,9 +44,7 @@ public class SFTP {
 
         List<String> cmd = new ArrayList<>();
         if (useSshpass) {
-            cmd.add("sshpass");
-            cmd.add("-p");
-            cmd.add(password);
+            cmd.add("sshpass"); cmd.add("-p"); cmd.add(password);
         }
         cmd.add("sftp");
         cmd.add("-q");
@@ -68,42 +60,46 @@ public class SFTP {
 
         try {
             Process proc = pb.start();
-            try (var writer = new BufferedWriter(new OutputStreamWriter(proc.getOutputStream()));
-                 var reader = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
-
-                String remoteDir = destination.contains("/")
-                        ? destination.substring(0, destination.lastIndexOf('/'))
-                        : "";
-                if (!remoteDir.isEmpty()) {
-                    writer.write("mkdir " + remoteDir + "\n");
-                    writer.write("cd "    + remoteDir + "\n");
-                }
-                String baseName = Paths.get(command.equals("put") ? source : destination)
-                        .getFileName().toString();
+            try (var wr = new BufferedWriter(new OutputStreamWriter(proc.getOutputStream()));
+                 var rd = new BufferedReader(new InputStreamReader(proc.getInputStream())))
+            {
                 if ("put".equals(command)) {
-                    writer.write("put " + source + " " + baseName + "\n");
-                } else {
-                    writer.write("get " + baseName + " " + destination + "\n");
+                    /* ---- upload ---- */
+                    String remoteDir = destination.contains("/")
+                            ? destination.substring(0, destination.lastIndexOf('/'))
+                            : "";
+                    if (!remoteDir.isEmpty()) {
+                        wr.write("mkdir " + remoteDir + "\n");
+                        wr.write("cd "    + remoteDir + "\n");
+                    }
+                    String base = Paths.get(source).getFileName().toString();
+                    wr.write("put " + source + " " + base + "\n");
+
+                } else {             // get (download)
+                    /* ---- download ---- */
+                    // make sure the *local* parent directory exists
+                    Path dest = Paths.get(destination).toAbsolutePath();
+                    Files.createDirectories(dest.getParent());
+
+                    String base = Paths.get(source).getFileName().toString();
+                    wr.write("get " + source + " " + destination + "\n");
                 }
-                writer.write("bye\n");
-                writer.flush();
+
+                wr.write("bye\n"); wr.flush();
 
                 String line;
-                while ((line = reader.readLine()) != null) {
+                while ((line = rd.readLine()) != null)
                     System.out.println("[INFO] {SFTP} " + line);
-                }
             }
 
             int code = proc.waitFor();
-            if (code != 0) {
+            if (code != 0)
                 System.err.println("[ERROR] {SFTP} exited with code " + code);
-            }
+
         } catch (IOException | InterruptedException e) {
-            System.err.println("[ERROR] {SFTP} error: " + e.getMessage());
+            System.err.println("[ERROR] {SFTP} " + e.getMessage());
         }
     }
-
-
 
 
     public static void shutdown() {

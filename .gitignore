@@ -39,3 +39,4 @@ bin/
 *.7zip
 *.jks
 .idea
+*.txt
