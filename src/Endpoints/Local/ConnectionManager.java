@@ -255,53 +255,48 @@ public class ConnectionManager {
         return new File(host.getDirectory(), hash);
     }
 
-
     public void democracy() {
-        endpoints.removeIf(peer -> {
-            Socket s = peer.getSocket();
-            return (s == null || s.isClosed());
+        endpoints.removeIf(p -> {
+            Socket s = p.getSocket();
+            return s == null || s.isClosed();
         });
-
         int n = endpoints.size();
         if (n == 0) return;
 
         int threshold = (n + 1) / 2;
 
-        Map<String, Integer> downloadVotes = new HashMap<>();
-        Map<String, Integer> uploadVotes   = new HashMap<>();
-
+        Map<String,Integer> downloadVotes = new HashMap<>();
+        Map<String,Integer> uploadVotes   = new HashMap<>();
 
         for (OutputHost peer : endpoints) {
             peer.setConnectionManager(this);
             peer.findMismatchedHashes();
-            for (String h : peer.getMissingLocal())   downloadVotes.merge(h, 1, Integer::sum);
-            for (String h : peer.getMissingRemote())  uploadVotes.merge(h, 1, Integer::sum);
+            for (String h : peer.getMissingLocal())  downloadVotes.merge(h, 1, Integer::sum);
+            for (String h : peer.getMissingRemote()) uploadVotes.merge(h,   1, Integer::sum);
         }
 
         List<String> toDownload = downloadVotes.entrySet().stream()
                 .filter(e -> e.getValue() >= threshold)
-                .map(Map.Entry::getKey)
-                .toList();
+                .map(Map.Entry::getKey).toList();
 
         List<String> toUpload = uploadVotes.entrySet().stream()
                 .filter(e -> e.getValue() >= threshold)
-                .map(Map.Entry::getKey)
-                .toList();
+                .map(Map.Entry::getKey).toList();
 
-        String remoteDirName = host.getDirectory().getName() + "/";
+        String remoteDir = host.getDirectory().getName();
+
         for (OutputHost peer : endpoints) {
-            String peerAddr = peer.getHost().getHostAddress();
+            String addr = peer.getHost().getHostAddress();
 
-
-            for (String hash : toDownload) {
-                File f = lookupLocalFile(hash);
-                SFTP.downloadFile(user, pass, peerAddr, 22,
-                        f.toPath(), remoteDirName + hash);
+            for (String h : toDownload) {
+                File f = lookupLocalFile(h);
+                SFTP.downloadFile(user, pass, addr, 22,
+                        f.toPath(), remoteDir + "/" + h);
             }
-            for (String hash : toUpload) {
-                File f = lookupLocalFile(hash);
-                SFTP.uploadFile(user, pass, peerAddr, 22,
-                        f.toPath(), remoteDirName + hash);
+            for (String h : toUpload) {
+                File f = lookupLocalFile(h);
+                SFTP.uploadFile(user, pass, addr, 22,
+                        f.toPath(), remoteDir + "/" + h);
             }
         }
     }

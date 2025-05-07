@@ -64,7 +64,6 @@ public class SFTP {
                  var rd = new BufferedReader(new InputStreamReader(proc.getInputStream())))
             {
                 if ("put".equals(command)) {
-                    /* ---- upload ---- */
                     String remoteDir = destination.contains("/")
                             ? destination.substring(0, destination.lastIndexOf('/'))
                             : "";
@@ -75,9 +74,7 @@ public class SFTP {
                     String base = Paths.get(source).getFileName().toString();
                     wr.write("put " + source + " " + base + "\n");
 
-                } else {             // get (download)
-                    /* ---- download ---- */
-                    // make sure the *local* parent directory exists
+                } else {
                     Path dest = Paths.get(destination).toAbsolutePath();
                     Files.createDirectories(dest.getParent());
 
