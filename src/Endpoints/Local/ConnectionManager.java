@@ -155,17 +155,20 @@ public class ConnectionManager {
 
     void sendFiles() {
         StringBuilder sb = new StringBuilder();
-        Path base = host.getDirectory().toPath();
+        Path root = host.getDirectory().toPath().getParent();
 
         for (Pair<File,String> p : fileHashPairs) {
-            String rel = base.relativize(p.Key().toPath())
+            String rel = root.relativize(p.Key().toPath())
                     .toString()
-                    .replace('\\','/')
-                    .replaceFirst("^/+", "");
+                    .replace('\\','/');
+            System.out.println("[DEBUG] {CM sendFiles} queuing --->" + rel);
             sb.append(rel).append('|').append(p.Val()).append('\n');
         }
+
         broadcast(sb.toString());
+        System.out.println("[DEBUG] {CM sendFiles} broadcast complete");
     }
+
 
 
     boolean[] multicast(ArrayList<OutputHost> endpointList, String output) {
@@ -293,7 +296,7 @@ public class ConnectionManager {
                 .filter(e -> e.getValue() >= threshold)
                 .map(Map.Entry::getKey).toList();
 
-        Path baseDir = host.getDirectory().toPath();
+        Path projRoot = host.getDirectory().toPath().getParent();
 
         for (OutputHost peer : endpoints) {
             String addr = peer.getHost().getHostAddress();
@@ -302,16 +305,19 @@ public class ConnectionManager {
                 String rel = peer.getPathForHash(h);
                 if (rel == null) continue;
                 rel = rel.replaceFirst("^/*", "");
-                Path localDst = baseDir.resolve(rel);
+                Path localDst = projRoot.resolve(rel);
                 SFTP.downloadFile(user, pass, addr, 22, localDst, rel);
             }
 
             for (String h : toUpload) {
                 File f = lookupLocalFile(h);
                 if (f == null) continue;
+
                 String rel = peer.getPathForHash(h);
                 if (rel == null) {
-                    rel = baseDir.relativize(f.toPath()).toString().replace('\\', '/');
+                    rel = projRoot.relativize(f.toPath())
+                            .toString()
+                            .replace('\\','/');
                 } else {
                     rel = rel.replaceFirst("^/*", "");
                 }
