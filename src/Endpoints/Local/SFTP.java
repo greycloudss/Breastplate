@@ -67,12 +67,14 @@ public class SFTP {
                         wr.write("mkdir " + dir + "\n");
                         wr.write("cd "   + dir + "\n");
                     }
-                    wr.write("put " + src + " " + Paths.get(src).getFileName() + "\n");
-                } else {                                       // get
+                    String remoteName = dst.substring(dst.lastIndexOf('/') + 1);
+                    wr.write("put " + src + " " + remoteName + "\n");
+                } else {
                     Path loc = Paths.get(dst).toAbsolutePath();
                     Files.createDirectories(loc.getParent());
                     wr.write("get " + src + " " + dst + "\n");
                 }
+
                 wr.write("bye\n"); wr.flush();
 
                 String line;
