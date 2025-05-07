@@ -9,6 +9,7 @@ import javax.net.ssl.SSLSocket;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -153,10 +154,14 @@ public class ConnectionManager {
     // some of these sending funcs might be redundant but ill keep them for now
 
     void sendFiles() {
-        StringBuilder a = new StringBuilder();
-        for (Pair<File, String> pair : fileHashPairs) a.append(pair.Val()).append("\n");
+        StringBuilder sb = new StringBuilder();
+        Path base = host.getDirectory().toPath();
 
-        broadcast(a.toString());
+        for (Pair<File,String> p : fileHashPairs) {
+            String rel = base.relativize(p.Key().toPath()).toString().replace('\\','/');
+            sb.append(rel).append('|').append(p.Val()).append('\n');
+        }
+        broadcast(sb.toString());
     }
 
     boolean[] multicast(ArrayList<OutputHost> endpointList, String output) {
@@ -250,9 +255,11 @@ public class ConnectionManager {
         }
     }
 
-
     private File lookupLocalFile(String hash) {
-        return new File(host.getDirectory(), hash);
+        for (Pair<File,String> p : fileHashPairs)
+            if (p.Val().equals(hash))
+                return p.Key();
+        return null;
     }
 
     public void democracy() {
@@ -265,41 +272,48 @@ public class ConnectionManager {
 
         int threshold = (n + 1) / 2;
 
-        Map<String,Integer> downloadVotes = new HashMap<>();
-        Map<String,Integer> uploadVotes   = new HashMap<>();
+        Map<String,Integer> dlVotes = new HashMap<>();
+        Map<String,Integer> ulVotes = new HashMap<>();
 
         for (OutputHost peer : endpoints) {
             peer.setConnectionManager(this);
             peer.findMismatchedHashes();
-            for (String h : peer.getMissingLocal())  downloadVotes.merge(h, 1, Integer::sum);
-            for (String h : peer.getMissingRemote()) uploadVotes.merge(h,   1, Integer::sum);
+            for (String h : peer.getMissingLocal())  dlVotes.merge(h, 1, Integer::sum);
+            for (String h : peer.getMissingRemote()) ulVotes.merge(h, 1, Integer::sum);
         }
 
-        List<String> toDownload = downloadVotes.entrySet().stream()
+        List<String> toDownload = dlVotes.entrySet().stream()
                 .filter(e -> e.getValue() >= threshold)
                 .map(Map.Entry::getKey).toList();
 
-        List<String> toUpload = uploadVotes.entrySet().stream()
+        List<String> toUpload = ulVotes.entrySet().stream()
                 .filter(e -> e.getValue() >= threshold)
                 .map(Map.Entry::getKey).toList();
-
-        String remoteDir = host.getDirectory().getName();
 
         for (OutputHost peer : endpoints) {
             String addr = peer.getHost().getHostAddress();
 
             for (String h : toDownload) {
-                File f = lookupLocalFile(h);
-                SFTP.downloadFile(user, pass, addr, 22,
-                        f.toPath(), remoteDir + "/" + h);
+                String rPath = peer.getPathForHash(h);
+                if (rPath == null) continue;
+                Path localDst = host.getDirectory().toPath().resolve(rPath);
+                SFTP.downloadFile(user, pass, addr, 22,          // ↓ src on peer, dst here
+                        localDst, rPath);
             }
             for (String h : toUpload) {
                 File f = lookupLocalFile(h);
+                if (f == null) continue;
+                String rPath = peer.getPathForHash(h);
+                if (rPath == null) {
+                    Path base = host.getDirectory().toPath();
+                    rPath = base.relativize(f.toPath()).toString().replace('\\','/');
+                }
                 SFTP.uploadFile(user, pass, addr, 22,
-                        f.toPath(), remoteDir + "/" + h);
+                        f.toPath(), rPath);
             }
         }
     }
+
 
     void mainLoop() {
         while (!killSwitch) {

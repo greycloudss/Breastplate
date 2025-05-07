@@ -23,6 +23,7 @@ public class OutputHost extends Host {
     private volatile ArrayList<String> missingLocal = new ArrayList<>();
     private volatile ArrayList<String> missingRemote = new ArrayList<>();
     private volatile ArrayList<Pair<String, String>> mismatches = new ArrayList<>();
+    private final List<Pair<String,String>> recvPairs = new ArrayList<>();
 
     public void setConnectionManager(ConnectionManager connectionManager) {
         this.connectionManager = connectionManager;
@@ -37,17 +38,19 @@ public class OutputHost extends Host {
         missingRemote.clear();
         mismatches.clear();
 
-        List<String> cmHashes = connectionManager.getAllHashes();
+        List<String> localHashes = connectionManager.getAllHashes();
 
-        for (String remoteHash : fileRecvH)
-            if (!cmHashes.contains(remoteHash)) missingLocal.add(remoteHash);
+        for (String h : fileRecvH)
+            if (!localHashes.contains(h))
+                missingLocal.add(h);
 
-        for (String localHash : cmHashes)
-            if (!fileRecvH.contains(localHash)) missingRemote.add(localHash);
+        for (String h : localHashes)
+            if (!fileRecvH.contains(h))
+                missingRemote.add(h);
 
-        int max = Math.max(missingLocal.size(), missingRemote.size());
-        for (int i = 0; i < max; i++) {
-            String r = i < missingLocal.size() ? missingLocal.get(i) : "";
+        int k = Math.max(missingLocal.size(), missingRemote.size());
+        for (int i = 0; i < k; i++) {
+            String r = i < missingLocal .size() ? missingLocal .get(i) : "";
             String l = i < missingRemote.size() ? missingRemote.get(i) : "";
             mismatches.add(new Pair<>(r, l));
         }
@@ -64,10 +67,23 @@ public class OutputHost extends Host {
         return mismatches;
     }
 
-    void parseMessage(String message) {
-        System.out.println("[INFO] {oHost pMsg} message:\n" + message);
-        String[] parts = message.split("\n");
-        fileRecvH.addAll(List.of(parts));
+    void parseMessage(String msg) {
+        recvPairs.clear();
+        fileRecvH.clear();
+
+        String[] lines = msg.split("\n");
+        for (String l : lines) {
+            l = l.trim();
+            if (l.isEmpty()) continue;
+            int bar = l.lastIndexOf('|');
+            if (bar < 0) continue;
+
+            String rel  = l.substring(0, bar);
+            String hash = l.substring(bar + 1);
+
+            recvPairs.add(new Pair<>(rel, hash));
+            fileRecvH.add(hash);
+        }
     }
 
     private void threadConnection() {

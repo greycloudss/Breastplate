@@ -17,71 +17,62 @@ import java.util.concurrent.TimeUnit;
 public class SFTP {
     private static final ExecutorService executor = Executors.newCachedThreadPool();
 
-    public static void downloadFile(String user, String password,
-                                    String host, int port,
-                                    Path localPath, String remotePath) {
-        executor.submit(() ->
-                runSftp(user, password, host, port, "get", remotePath, localPath.toString())
-        );
+
+    public static void uploadFile(String user, String pass, String host, int port,
+                                  Path local, String remoteRel) {
+        executor.submit(() -> runSftp(user, pass, host, port,
+                "put", local.toString(), remoteRel.replace('\\','/')));
     }
 
-    public static void uploadFile(String user, String password,
-                                  String host, int port,
-                                  Path localPath, String remotePath) {
-        executor.submit(() ->
-                runSftp(user, password, host, port, "put", localPath.toString(), remotePath)
-        );
+    public static void downloadFile(String user, String pass, String host, int port,
+                                    Path local, String remoteRel) {
+        executor.submit(() -> runSftp(user, pass, host, port,
+                "get", remoteRel.replace('\\','/'), local.toString()));
     }
+
+
 
     private static void runSftp(String user, String password,
                                 String host, int ignoredPort,
-                                String command, String source, String destination) {
+                                String cmd, String src, String dst) {
 
         int sshPort = 22;
-        boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
-        boolean useSshpass = !password.isEmpty() && !isWindows;
-        String knownHostsFile = isWindows ? "NUL" : "/dev/null";
+        boolean win  = System.getProperty("os.name").toLowerCase().contains("win");
+        boolean useP = !password.isEmpty() && !win;
+        String khf   = win ? "NUL" : "/dev/null";
 
-        List<String> cmd = new ArrayList<>();
-        if (useSshpass) {
-            cmd.add("sshpass"); cmd.add("-p"); cmd.add(password);
-        }
-        cmd.add("sftp");
-        cmd.add("-q");
-        cmd.add("-oBatchMode=no");
-        cmd.add("-oStrictHostKeyChecking=no");
-        cmd.add("-oUserKnownHostsFile=" + knownHostsFile);
-        cmd.add("-oPort=" + sshPort);
-        cmd.add(user + "@" + host);
+        List<String> shell = new ArrayList<>();
+        if (useP) { shell.add("sshpass"); shell.add("-p"); shell.add(password); }
+        shell.add("sftp");
+        shell.add("-q");
+        shell.add("-oBatchMode=no");
+        shell.add("-oStrictHostKeyChecking=no");
+        shell.add("-oUserKnownHostsFile=" + khf);
+        shell.add("-oPort=" + sshPort);
+        shell.add(user + "@" + host);
 
-        System.out.println("[DEBUG] SFTP cmd: " + String.join(" ", cmd));
+        System.out.println("[DEBUG] SFTP cmd: " + String.join(" ", shell));
 
-        ProcessBuilder pb = new ProcessBuilder(cmd).redirectErrorStream(true);
+        ProcessBuilder pb = new ProcessBuilder(shell).redirectErrorStream(true);
 
         try {
-            Process proc = pb.start();
-            try (var wr = new BufferedWriter(new OutputStreamWriter(proc.getOutputStream()));
-                 var rd = new BufferedReader(new InputStreamReader(proc.getInputStream())))
-            {
-                if ("put".equals(command)) {
-                    String remoteDir = destination.contains("/")
-                            ? destination.substring(0, destination.lastIndexOf('/'))
-                            : "";
-                    if (!remoteDir.isEmpty()) {
-                        wr.write("mkdir " + remoteDir + "\n");
-                        wr.write("cd "    + remoteDir + "\n");
+            Process p = pb.start();
+            try (var wr = new BufferedWriter(new OutputStreamWriter(p.getOutputStream()));
+                 var rd = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+
+                if ("put".equals(cmd)) {
+                    int cut = dst.lastIndexOf('/');
+                    if (cut > 0) {
+                        String dir = dst.substring(0, cut);
+                        wr.write("mkdir " + dir + "\n");
+                        wr.write("cd "   + dir + "\n");
                     }
-                    String base = Paths.get(source).getFileName().toString();
-                    wr.write("put " + source + " " + base + "\n");
-
-                } else {
-                    Path dest = Paths.get(destination).toAbsolutePath();
-                    Files.createDirectories(dest.getParent());
-
-                    String base = Paths.get(source).getFileName().toString();
-                    wr.write("get " + source + " " + destination + "\n");
+                    wr.write("put " + src + " " + Paths.get(src).getFileName() + "\n");
+                } else {                                       // get
+                    Path loc = Paths.get(dst).toAbsolutePath();
+                    Files.createDirectories(loc.getParent());
+                    wr.write("get " + src + " " + dst + "\n");
                 }
-
                 wr.write("bye\n"); wr.flush();
 
                 String line;
@@ -89,9 +80,8 @@ public class SFTP {
                     System.out.println("[INFO] {SFTP} " + line);
             }
 
-            int code = proc.waitFor();
-            if (code != 0)
-                System.err.println("[ERROR] {SFTP} exited with code " + code);
+            int code = p.waitFor();
+            if (code != 0) System.err.println("[ERROR] {SFTP} exited with " + code);
 
         } catch (IOException | InterruptedException e) {
             System.err.println("[ERROR] {SFTP} " + e.getMessage());
