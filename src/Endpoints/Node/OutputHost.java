@@ -75,25 +75,18 @@ public class OutputHost extends Host {
         return null;
     }
 
-    void parseMessage(String msg) {
-        recvPairs.clear();
+    void parseMessage(String message) {
+        String[] lines = message.split("\n");
         fileRecvH.clear();
-
-        String[] lines = msg.split("\n");
-        for (String l : lines) {
-            l = l.trim();
-            if (l.isEmpty()) continue;
-
-            int bar = l.lastIndexOf('|');
-            if (bar < 0) continue;
-
-            String rel  = l.substring(0, bar).replaceFirst("^/+", "");
-            String hash = l.substring(bar + 1);
-
-            recvPairs.add(new Pair<>(rel, hash));
-            fileRecvH.add(hash);
+        for (String line : lines) {
+            int sep = line.indexOf('|');
+            if (sep < 0) continue;
+            String rel  = line.substring(0, sep).replaceFirst("^/+", "");
+            String hash = line.substring(sep + 1).trim();
+            if (!hash.isEmpty()) fileRecvH.add(rel + "|" + hash);
         }
     }
+
 
 
     private void threadConnection() {

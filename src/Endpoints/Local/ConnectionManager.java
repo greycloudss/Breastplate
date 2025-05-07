@@ -7,9 +7,10 @@ import helpers.SSLUtil;
 import javax.net.ssl.SSLServerSocket;
 import javax.net.ssl.SSLSocket;
 import java.io.*;
-import java.net.ServerSocket;
+import java.nio.file.*;
 import java.net.Socket;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -151,18 +152,21 @@ public class ConnectionManager {
         }
     }
 
-    // some of these sending funcs might be redundant but ill keep them for now
 
     void sendFiles() {
         StringBuilder sb = new StringBuilder();
         Path base = host.getDirectory().toPath();
 
         for (Pair<File,String> p : fileHashPairs) {
-            String rel = base.relativize(p.Key().toPath()).toString().replace('\\','/');
+            String rel = base.relativize(p.Key().toPath())
+                    .toString()
+                    .replace('\\','/')
+                    .replaceFirst("^/+", "");
             sb.append(rel).append('|').append(p.Val()).append('\n');
         }
         broadcast(sb.toString());
     }
+
 
     boolean[] multicast(ArrayList<OutputHost> endpointList, String output) {
         boolean[] multicasted = new boolean[endpointList.size()];
@@ -271,7 +275,6 @@ public class ConnectionManager {
         if (n == 0) return;
 
         int threshold = (n + 1) / 2;
-
         Map<String,Integer> dlVotes = new HashMap<>();
         Map<String,Integer> ulVotes = new HashMap<>();
 
@@ -290,26 +293,29 @@ public class ConnectionManager {
                 .filter(e -> e.getValue() >= threshold)
                 .map(Map.Entry::getKey).toList();
 
+        Path baseDir = host.getDirectory().toPath();
+
         for (OutputHost peer : endpoints) {
             String addr = peer.getHost().getHostAddress();
 
             for (String h : toDownload) {
-                String rPath = peer.getPathForHash(h);
-                if (rPath == null) continue;
-                Path localDst = host.getDirectory().toPath().resolve(rPath);
-                SFTP.downloadFile(user, pass, addr, 22,
-                        localDst, rPath);
+                String rel = peer.getPathForHash(h);
+                if (rel == null) continue;
+                rel = rel.replaceFirst("^/*", "");
+                Path localDst = baseDir.resolve(rel);
+                SFTP.downloadFile(user, pass, addr, 22, localDst, rel);
             }
+
             for (String h : toUpload) {
                 File f = lookupLocalFile(h);
                 if (f == null) continue;
-                String rPath = peer.getPathForHash(h);
-                if (rPath == null) {
-                    Path base = host.getDirectory().toPath();
-                    rPath = base.relativize(f.toPath()).toString().replace('\\','/');
+                String rel = peer.getPathForHash(h);
+                if (rel == null) {
+                    rel = baseDir.relativize(f.toPath()).toString().replace('\\', '/');
+                } else {
+                    rel = rel.replaceFirst("^/*", "");
                 }
-                SFTP.uploadFile(user, pass, addr, 22,
-                        f.toPath(), rPath);
+                SFTP.uploadFile(user, pass, addr, 22, f.toPath(), rel);
             }
         }
     }
