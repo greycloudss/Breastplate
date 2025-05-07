@@ -63,16 +63,18 @@ public class SFTP {
                 if ("put".equals(cmd)) {
                     int cut = dst.lastIndexOf('/');
                     if (cut > 0) {
-                        String dir = dst.substring(0, cut).replaceFirst("^/+", "");
-                        wr.write("mkdir " + dir + "\n");
-                        wr.write("cd "   + dir + "\n");
+                        String dirPath = dst.substring(0, cut).replaceFirst("^/+", "");
+                        for (String seg : dirPath.split("/+")) {
+                            wr.write("mkdir " + seg + "\n");
+                            wr.write("cd "   + seg + "\n");
+                        }
                     }
                     String remoteName = dst.substring(dst.lastIndexOf('/') + 1);
                     wr.write("put " + src + " " + remoteName + "\n");
                 } else {
-                    Path loc = Paths.get(dst).toAbsolutePath();
+                    Path loc = Paths.get(src).toAbsolutePath();
                     Files.createDirectories(loc.getParent());
-                    wr.write("get " + dst.replaceFirst("^/+", "") + " " + dst + "\n");
+                    wr.write("get " + dst.replaceFirst("^/+", "") + " " + src + "\n");
                 }
 
                 wr.write("bye\n"); wr.flush();
@@ -89,7 +91,6 @@ public class SFTP {
             System.err.println("[ERROR] {SFTP} " + e.getMessage());
         }
     }
-
 
 
     public static void shutdown() {

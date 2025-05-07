@@ -155,19 +155,23 @@ public class ConnectionManager {
 
     void sendFiles() {
         StringBuilder sb = new StringBuilder();
-        Path root = host.getDirectory().toPath().getParent();
+
+        Path    dir     = host.getDirectory().toPath();
+        String  prefix  = dir.getParent().getFileName() + "/"
+                + dir.getFileName();
 
         for (Pair<File,String> p : fileHashPairs) {
-            String rel = root.relativize(p.Key().toPath())
+            String inner = dir.relativize(p.Key().toPath())
                     .toString()
                     .replace('\\','/');
-            System.out.println("[DEBUG] {CM sendFiles} queuing --->" + rel);
+            String rel   = prefix + "/" + inner;
+            System.out.println("[DEBUG] {CM sendFiles} queuing → " + rel);
             sb.append(rel).append('|').append(p.Val()).append('\n');
         }
-
         broadcast(sb.toString());
         System.out.println("[DEBUG] {CM sendFiles} broadcast complete");
     }
+
 
 
 
@@ -297,7 +301,7 @@ public class ConnectionManager {
                 .map(Map.Entry::getKey).toList();
 
         Path dir   = host.getDirectory().toPath();
-        String top = dir.getParent().getFileName().toString();
+        String prefix = dir.getParent().getFileName() + "/" + dir.getFileName();
 
         for (OutputHost peer : endpoints) {
             String addr = peer.getHost().getHostAddress();
@@ -306,8 +310,7 @@ public class ConnectionManager {
                 String rel = peer.getPathForHash(h);
                 if (rel == null) continue;
                 rel = rel.replaceFirst("^/*", "");
-                Path localDst = dir.getParent().getParent()
-                        .resolve(rel);
+                Path localDst = dir.getParent().getParent().resolve(rel);
                 SFTP.downloadFile(user, pass, addr, 22, localDst, rel);
             }
 
@@ -317,10 +320,8 @@ public class ConnectionManager {
 
                 String rel = peer.getPathForHash(h);
                 if (rel == null) {
-                    String inner = dir.relativize(f.toPath())
-                            .toString()
-                            .replace('\\','/');
-                    rel = top + "/" + inner;
+                    String inner = dir.relativize(f.toPath()).toString().replace('\\','/');
+                    rel = prefix + "/" + inner;
                 } else {
                     rel = rel.replaceFirst("^/*", "");
                 }
